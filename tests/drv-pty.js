@@ -186,7 +186,9 @@
       return origInvoke(m, p);
     };
     let start = __writes.length;
+    ptyMode = false; // retained legacy collector; PTY delivery is tested below
     const request = execMon("printf ok", 2000);
+    ptyMode = true;
     fireBytes(Buffer.from("prompt$ ").toString("base64"));
     await request;
     fireBytes(Buffer.from("typed").toString("base64"));
@@ -214,11 +216,33 @@
       if (m === "shell/exec") return {};
       return origInvoke(m, p);
     };
+    ptyMode = false;
     const stopped = execMon("printf ok", 2000).then(() => false, () => true);
+    ptyMode = true;
     const flight = mon.flight;
     monStop();
     ok("pty: stopping monitoring settles its flight", await stopped);
     ok("pty: stopping monitoring cancels its deadline", flight.done && flight.timer._destroyed);
+
+    // A superseded startup may finish after a reconnect has started a new one.
+    const originalCollectors = { execMon, monSysinfo, monFastTick, monSlowTick, monSftpProbe };
+    let failOldProbe;
+    let probeCount = 0;
+    execMon = () => ++probeCount === 1
+      ? new Promise((resolve, reject) => { failOldProbe = reject; })
+      : Promise.resolve({ text: "ok", ok: true });
+    monSysinfo = monFastTick = monSlowTick = async () => {};
+    monSftpProbe = async () => { throw new Error("old startup fallback"); };
+    ptyMode = false;
+    const oldStart = monStart();
+    await monStart();
+    failOldProbe(new Error("old startup rejected late"));
+    await oldStart;
+    ok("pty: superseded monitor startup cannot stop the current poller",
+      mon.active && mon.ok && mon.phase === "ready" && mon.transport === "exec");
+    monStop();
+    ptyMode = true;
+    ({ execMon, monSysinfo, monFastTick, monSlowTick, monSftpProbe } = originalCollectors);
   } catch (e) {
     out.push("FAIL harness: " + (e && e.message) + "\n" + String((e && e.stack) || "").split("\n").slice(0, 6).join("\n"));
   }

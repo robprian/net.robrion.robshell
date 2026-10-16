@@ -1,5 +1,13 @@
 # Changelog — RShell (`net.robrion.robshell`)
 
+## 1.3.5 — interactive monitoring isolated from PTY
+
+- Interactive SSH monitoring now uses SFTP reads only. Background startup probes, disk retries, and transport upgrades can no longer call `shell/exec` beside an interactive PTY. The reproduced failure was unframed `\r\n` emitted by a shared-channel exec attempt: marker filtering removed metric text but could not distinguish these newlines from legitimate terminal output, and marker scans therefore missed the cursor movement. A regression reproduces startup and repeated-refresh drift before this change and passes afterwards.
+- CPU, memory, network, uptime, and hostname continue to use remote SFTP data. Disk usage is honestly `N/A` when an isolated collector is unavailable; the UI no longer risks moving the cursor to obtain `df`. Directory following uses the existing silent `shell/cwd` metadata probe. User commands, input, and terminal escape sequences are unchanged.
+- Fixed a reproducible monitor startup race: a late failure from a superseded startup could mark a newer successful poller as failed and cancel its timers. Startup continuations now check a generation token after each asynchronous boundary. This defect is confirmed by a failing-before/passing-after VM regression; its relationship to the reported visual cursor drift is unconfirmed.
+- Added an opt-in DevTools diagnostic in `tests/terminal-trace.js`. It captures sanitized control sequences, write origins, native buffer/cursor positions, and known monitor timer state, and restores its wrappers after five minutes or `stop()`. It is excluded from the plugin package and never runs automatically.
+- The user confirmed that cursor blinking/alignment is now working. Agent verification covered the five-minute native-xterm fixture and automated suites; a complete live SSH/TUI acceptance run was not performed by the agent.
+
 ## 1.3.4 — stable PTY output and monitor isolation (2026-10-16)
 
 ### Fixed

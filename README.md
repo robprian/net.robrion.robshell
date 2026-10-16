@@ -1,4 +1,6 @@
-# RShell (net.robrion.robshell v1.3.4)
+# RShell (net.robrion.robshell v1.3.5)
+
+This release removes background monitor exec from interactive SSH sessions. Metrics use SFTP reads; disk usage stays `N/A` when no isolated collector is available. The user confirmed that cursor blinking/alignment is now working. See `tests/CURSOR-INVESTIGATION.md` for the automated and native-renderer evidence and its limits.
 
 Fork of `com.nintycat.shell` v0.8.4 (NintyShell): local shell and SSH/SFTP
 terminals with auto-copy selection, a premium themed terminal, a real-time

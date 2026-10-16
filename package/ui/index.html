@@ -2392,7 +2392,7 @@
       // for it; when the host withholds that permission the request rejects and
       // the check degrades to "off" instead of breaking anything.
       // -------------------------------------------------------------------
-      const CURRENT_VERSION = "1.3.4";
+      const CURRENT_VERSION = "1.3.5";
       const UPDATE_REPO = "robprian/net.robrion.robshell";
       const UPDATE_API = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
       const UPDATE_PAGE = "https://github.com/" + UPDATE_REPO + "/releases/latest";
@@ -5881,13 +5881,11 @@ function sugHighlight(command, indices) {
 }
 /*__SUGGEST_END__*/
       // ===== RShell live monitor: SSH remote metrics (com.robshell) =====
-      // Metrics are collected with the SAME authenticated SSH connection via the
-      // existing shell/exec channel (one lightweight /proc read per tick). No new
-      // connection is opened. If the backend cannot serve exec alongside the PTY
-      // (or output cannot be separated from the terminal stream), monitoring
-      // disables itself and the bar keeps identity + actions only. No mock data.
+      // Interactive PTY sessions collect metrics through SFTP reads only.
+      // shell/exec shares shell/output and can emit unframed CR/LF around its
+      // markers. Those bytes are indistinguishable from legitimate user output.
       const mon = {
-        active: false, ok: false, flight: null,
+        active: false, ok: false, flight: null, generation: 0,
         tFast: null, tSlow: null, tRtt: null, tWatch: null,
         prevCpu: null, prevNet: null, prevNetAt: 0, ifaces: [],
         info: {}, sysDone: false, cpuBuf: [],
@@ -5913,6 +5911,7 @@ function sugHighlight(command, indices) {
 
       function execMon(cmd, timeoutMs) {
         return new Promise((resolve, reject) => {
+          if (ptyMode) { reject(new Error("monitor exec disabled for interactive PTY")); return; }
           if (mon.flight) { reject(new Error("busy")); return; }
           if (!window.dbxPlugin || typeof window.dbxPlugin.invoke !== "function") { reject(new Error("no bridge")); return; }
           const r = Math.random().toString(36).slice(2, 8);
@@ -5969,10 +5968,8 @@ function sugHighlight(command, indices) {
         }
       }
 
-      // Permanent PTY guard (see monScrubStream). Runs on EVERY chunk, not just
-      // during a flight, so a late/duplicated/echoed exec payload can never
-      // scroll the terminal. The trailing partial line is held briefly and then
-      // flushed so a prompt can never stall.
+      // Filter late marker-framed exec blocks. Unframed bytes remain terminal
+      // output; preventing new background exec belongs at the transport boundary.
       function monPtyOut(bytes) {
         if (!bytes || !bytes.length) return;
         if (termReady) term.write(bytes);
@@ -6196,6 +6193,8 @@ function sugHighlight(command, indices) {
 
       async function monStart() {
         monStop();
+        const generation = mon.generation;
+        const isCurrent = () => mon.active && mon.generation === generation;
         if (sessionKind !== "ssh" || !settings.monOn) {
           monSetPhase(!settings.monOn ? "disabled" : "idle");
           monRenderIdle();
@@ -6217,17 +6216,18 @@ function sugHighlight(command, indices) {
         monRenderIdle();
         monRttTick();
         mon.tRtt = setInterval(monRttTick, 5000);
-        // Transport A: exec channel (full data incl. df + remote identity).
+        if (ptyMode) mon.execError = "disabled for interactive PTY; using SFTP";
+        // Transport A: exec for non-interactive sessions only.
         // The backend serves ONE exec at a time; DBX's own startup calls
         // (docker/detect, cwd, sftp listing) can hold that slot for a moment,
         // so a contention answer is retried instead of dropping to SFTP for
         // good. Skipped entirely once exec has proved unsafe for this PTY
         // (mon.execUnsafe is sticky: re-probing would just scroll again).
         let probeOk = false;
-        for (let attempt = 0; !mon.execUnsafe && attempt < 4 && mon.active; attempt++) {
+        for (let attempt = 0; !ptyMode && !mon.execUnsafe && attempt < 4 && isCurrent(); attempt++) {
           try {
             const r = await execMon("printf 'ok\\n'", 6000);
-            if (!mon.active) return;
+            if (!isCurrent()) return;
             const got = !!(r.text && r.text.indexOf("ok") >= 0);
             const leaked = monScanBuffer(r.begin);
             if (leaked) mon.execUnsafe = true;
@@ -6238,43 +6238,45 @@ function sugHighlight(command, indices) {
             }
             mon.execError = !got ? "probe: no output captured" : (!r.ok ? "probe: remote exit non-zero" : "probe: output leaked into terminal");
           } catch (err) {
-            if (!mon.active) return;
+            if (!isCurrent()) return;
             mon.execError = "probe: " + ((err && err.message) || err || "failed");
           }
           if (!/another command is still running|busy|timeout/i.test(mon.execError)) break;
           await new Promise((res) => setTimeout(res, 1200 + attempt * 900));
         }
+        if (!isCurrent()) return;
         if (probeOk) {
           mon.transport = "exec";
           mon.ok = true;
           mon.fails = 0;
           monSetPhase("ready");
           try { await monSysinfo(); } catch (_) {}
-          if (!mon.active || !mon.ok) return;
+          if (!isCurrent() || !mon.ok) return;
           try { await monFastTick(); } catch (_) {}
-          if (!mon.active || !mon.ok) return;
+          if (!isCurrent() || !mon.ok) return;
           try { await monSlowTick(); } catch (_) {}
+          if (!isCurrent() || !mon.ok) return;
           monRestartTimers();
           return;
         }
-        if (!mon.active) return;
         // Transport B: SFTP file reads (no exec channel needed; no disk usage).
         try {
           await monSftpProbe();
-          if (!mon.active) return;
+          if (!isCurrent()) return;
           mon.transport = "sftp";
           mon.ok = true;
           mon.fails = 0;
           monSetPhase("ready");
           try { await monSftpSysinfo(); } catch (_) {}
-          if (!mon.active || !mon.ok) return;
+          if (!isCurrent() || !mon.ok) return;
           try { await monSftpFast(); } catch (_) {}
-          if (!mon.active || !mon.ok) return;
+          if (!isCurrent() || !mon.ok) return;
           try { await monSftpSlow(); } catch (_) {}
+          if (!isCurrent() || !mon.ok) return;
           monRestartTimers();
           return;
         } catch (err) {
-          if (!mon.active) return;
+          if (!isCurrent()) return;
           mon.sftpError = "probe: " + ((err && err.message) || err || "failed");
         }
         mon.na = true;
@@ -6297,6 +6299,7 @@ function sugHighlight(command, indices) {
       }
 
       function monStop() {
+        mon.generation += 1;
         mon.active = false;
         mon.ok = false;
         if (mon.flight) mon.flight.reject(new Error("monitor stopped"));
@@ -6348,16 +6351,15 @@ function sugHighlight(command, indices) {
           monFastTick();
           monSlowTick();
         }
-        // On SFTP, retry the exec channel once a minute: exec gives the real
-        // disk figure (and denser samples) whenever the slot is free.
-        if (mon.transport === "sftp" && Date.now() - (mon.execRetryAt || 0) > 60000) {
+        // Only a non-interactive session may try to upgrade SFTP to exec.
+        if (!ptyMode && mon.transport === "sftp" && Date.now() - (mon.execRetryAt || 0) > 60000) {
           mon.execRetryAt = Date.now();
           monTryUpgradeExec();
         }
       }
 
       async function monTryUpgradeExec() {
-        if (!mon.active || !mon.ok || mon.flight || mon.transport !== "sftp" || mon.execUnsafe) return;
+        if (ptyMode || !mon.active || !mon.ok || mon.flight || mon.transport !== "sftp" || mon.execUnsafe) return;
         try {
           const r = await execMon("printf 'ok\\n'", 6000);
           if (!mon.active || !mon.ok || mon.flight) return;
@@ -6487,7 +6489,7 @@ function sugHighlight(command, indices) {
             // Disk has no /proc source: retry the exec channel now and then in
             // case it was only transiently unavailable when we probed —
             // unless exec already proved unsafe for this PTY.
-            if (!mon.execUnsafe && Date.now() - mon.sftpDiskTryAt > 30000) {
+            if (!ptyMode && !mon.execUnsafe && Date.now() - mon.sftpDiskTryAt > 30000) {
               mon.sftpDiskTryAt = Date.now();
               try {
                 const d = await monFetchDisk();
@@ -6552,14 +6554,20 @@ function sugHighlight(command, indices) {
       }
 
       async function monRttTick() {
-        if (!mon.active) return;
+        if (!mon.active || mon.flight) return;
+        const generation = mon.generation;
         const t0 = performance.now();
         try {
-          await window.dbxPlugin.invoke("shell/cwd", { connectionId });
-          if (!mon.active) return;
+          const info = await window.dbxPlugin.invoke("shell/cwd", { connectionId });
+          if (!mon.active || mon.generation !== generation) return;
           mon.rttMs = Math.round(performance.now() - t0);
+          if (info && info.cwd && info.cwd !== cwd) {
+            cwd = info.cwd;
+            monApplyCwd(cwd);
+          }
         } catch (_) {
-          if (mon.active) mon.rttMs = null;
+          if (!mon.active || mon.generation !== generation) return;
+          mon.rttMs = null;
         }
         monRenderRtt();
       }

@@ -11,7 +11,12 @@
     throw new Error("timeout: " + label);
   }
   const NL = String.fromCharCode(10);
-  const sendOutput = (text) => __fireEvent({ method: "shell/output", params: { connectionId: "c1", data: Buffer.from(text, "utf8").toString("base64") } });
+  const sendOutput = (text) => {
+    const previous = ptyMode;
+    ptyMode = true;
+    try { __fireEvent({ method: "shell/output", params: { connectionId: "c1", data: Buffer.from(text, "utf8").toString("base64") } }); }
+    finally { ptyMode = previous; }
+  };
   async function nextFlight(timeout, label) {
     let lastBegin = nextFlight._last || null;
     const t0 = Date.now();
@@ -53,6 +58,11 @@
     return f;
   }
   try {
+    // Exercise the retained non-interactive exec collector. Interactive SSH
+    // monitoring uses SFTP; events are replayed separately through the guard.
+    await waitFor(() => termReady, 5000, "terminal ready");
+    ptyMode = false;
+    monStart();
     await waitFor(() => mon.active === true, 5000, "mon active");
     await waitFor(() => !!mon.flight, 5000, "probe flight");
     const begin = mon.flight.begin, end = mon.flight.end;

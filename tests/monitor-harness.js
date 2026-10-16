@@ -106,6 +106,7 @@ function runScenarioReal(mode) {
     };
     let fireEvent = null;
     const resizeCalls = [];
+    const execCalls = [];
     const dbxPlugin = {
       ready: Promise.resolve(),
       context: { connectionId: "c1", connectionName: "Shell" },
@@ -115,12 +116,19 @@ function runScenarioReal(mode) {
         if (method === "shell/resize") resizeCalls.push({ cols: params.cols, rows: params.rows });
         if (method === "shell/cwd") return { kind: "ssh", cwd: "/root", home: "/root", shell: "/bin/bash", sid: "s1" };
         if (method === "shell/exec") {
+          execCalls.push(params.command);
+          if (mode === "idle") {
+            // A shared-channel backend can emit unframed terminal newlines
+            // even when exec fails. Marker filtering cannot identify these.
+            fireEvent({ method: "shell/output", params: { connectionId: "c1", data: Buffer.from("\r\n").toString("base64") } });
+            throw new Error("not supported in pty mode");
+          }
           if (mode === "ok" || (mode === "sftpdisk" && sandbox.__execOk)) return {};
           throw new Error("not supported in pty mode");
         }
         if (method === "filesystem/read") {
-          if (mode !== "sftp" && mode !== "sftpdisk") throw new Error("sftp unavailable");
-          if (mode === "sftp" || mode === "sftpdisk" || mode === "ok") {
+          if (mode !== "sftp" && mode !== "sftpdisk" && mode !== "idle") throw new Error("sftp unavailable");
+          if (mode === "sftp" || mode === "sftpdisk" || mode === "idle") {
             try {
               const text = fsContent(params && params.uri);
               return { dataBase64: Buffer.from(text, "utf8").toString("base64") };
@@ -166,7 +174,7 @@ function runScenarioReal(mode) {
       // tests/drv-update.js installs its own fetch to drive the happy paths.
       fetch: null,
       window: null, document: null, Buffer,
-      __writes: writes, __resizeCalls: resizeCalls, __mode: mode, __clipText: "",
+      __writes: writes, __resizeCalls: resizeCalls, __execCalls: execCalls, __mode: mode, __clipText: "",
       __setClip: null,
       __execOk: false,
       __fixtures: null, // set below
@@ -222,7 +230,7 @@ function runScenarioReal(mode) {
     const fast1 = fastSample(STAT1, NET1);
     const fast2 = fastSample(STAT2, NET2);
     const slowS = DF + "__DU__\n" + UP;
-    const driverFiles = { ok: "drv-ok.js", reject: "drv-reject.js", sftp: "drv-sftp.js", paste: "drv-paste.js", sftpdisk: "drv-sftpdisk.js", suggest: "drv-suggest.js", conn: "drv-conn.js", update: "drv-update.js", pty: "drv-pty.js" };
+    const driverFiles = { idle: "drv-idle.js", ok: "drv-ok.js", reject: "drv-reject.js", sftp: "drv-sftp.js", paste: "drv-paste.js", sftpdisk: "drv-sftpdisk.js", suggest: "drv-suggest.js", conn: "drv-conn.js", update: "drv-update.js", pty: "drv-pty.js" };
     if (!driverFiles[mode]) throw new Error("unknown mode " + mode + " (debug removed; use ok)");
     const driver = fs.readFileSync(path.join(__dirname, driverFiles[mode]), "utf-8");
     try {
@@ -236,7 +244,7 @@ function runScenarioReal(mode) {
 
 (async () => {
   const arg = process.argv[2] || "both";
-  const modes = arg === "both" ? ["reject", "ok", "sftp", "sftpdisk", "paste", "suggest", "conn", "update", "pty"] : [arg];
+  const modes = arg === "both" ? ["reject", "ok", "sftp", "sftpdisk", "paste", "suggest", "conn", "update", "pty", "idle"] : [arg];
   let failed = 0;
   for (const m of modes) {
     console.log("=== scenario: " + m + " ===");
