@@ -1,0 +1,204 @@
+# RShell (net.robrion.robshell v1.2.1)
+
+Fork of `com.nintycat.shell` v0.8.4 (NintyShell): local shell and SSH/SFTP
+terminals with auto-copy selection, a premium themed terminal, a real-time
+**server monitoring status bar**, **next-command suggestions** from your command
+history, and **keep-alive + auto-reconnect** that never wipes your scrollback.
+No backend rebuild — the original `dbx-plugin-nintyshell` sidecar is reused with
+only the identity strings/version patched in place.
+
+## Contents
+
+```
+com.robshell/               <- repo folder name (historical)
+  package/                  <- plugin source (this is what gets zipped)
+    manifest.json           <- id net.robrion.robshell, name RShell, v1.2.1
+    checksums.json          <- sha256 of every other file, exactly once
+    assets/plugin.ico       <- icon.png artwork, minimized ICO (32 KB)
+    bin/windows-x64/dbx-plugin-robshell.exe
+    ui/index.html           <- patched UI (chrome + status bar + terminal)
+  dist/
+    net.robrion.robshell.dbxp  <- installable package (unsigned dev build)
+  dbx-plugin.toml           <- project config for `dbx-plugin package` (CLI)
+  tests/
+    monitor-core.test.js    <- 70 unit tests: metric parsers + reconnect core
+    suggest-core.test.js    <- 62 unit tests for the suggestion engine
+    theme-core.test.js      <- 445 unit tests for the theme token palettes
+    monitor-harness.js      <- headless integration harness (real UI code)
+    drv-*.js                <- per-scenario drivers
+                               (ok/reject/sftp/sftpdisk/paste/suggest/conn)
+  CHANGELOG.md
+  README.md (this file)
+```
+
+## Features
+
+- **Monitoring status bar** (replaces the old header): `🟢 host │ CPU │ RAM │
+  Disk │ ↑↓ net │ RTT │ uptime │ ⋯ │ Files Docker Clear Interrupt ⚙`.
+  SSH sessions only; local sessions show identity + actions.
+- **Real remote data**: CPU (`/proc/stat` deltas + per-core + loadavg), RAM
+  (`/proc/meminfo`, MemAvailable-correct), disk (`df -Pk`, POSIX one-line rows,
+  root picked by mount, `-P`/`-B1`/`-k` fallbacks), network (`/proc/net/dev`
+  deltas, loopback excluded, adaptive KB/s–GB/s), uptime (`/proc/uptime`),
+  sysinfo (hostname, user, kernel, OS, CPU model/count). RTT = `shell/cwd`
+  bridge round-trip, labeled as such.
+- **Safe by design**: one combined `/proc` read per tick on the SAME SSH
+  connection (no new connections); probe-then-enable (exec support + xterm
+  buffer leak scan); random per-sample markers separate exec output from the
+  PTY stream; polling pauses briefly while typing; 5 failures stop polling and
+  a watchdog re-arms the timers if samples stall. If the backend can't serve
+  exec next to the PTY, the bar uses SFTP file reads for CPU/RAM/net/uptime and
+  retries exec for disk — never mock values.
+- **Details popover** (click hostname) + **overflow menu** (⋯) + CPU sparkline.
+- **Responsive**: full / reduced / minimal tiers from measured header width.
+- **Settings → Terminal Status Bar**: on/off, compact mode, visible metrics,
+  fast/slow intervals, interface, warn thresholds, sparkline, popover.
+- Right-click paste (no selection) + Ctrl+V/Shift+Insert; multi-line paste
+  asks for confirmation (configurable threshold). Right-click paste has its own
+  Settings toggle.
+- **Next-command suggestion** (like `jinpy666/dbx-plugin-ssh`): type the prefix
+  of a command you ran before and the rest appears as dim inline text —
+  `→` accepts it, `Ctrl+→` one word at a time, `Esc` dismisses. A fuzzy list
+  (matched characters highlighted) appears above the input line;
+  `Ctrl+↑`/`Ctrl+↓` pick a row, `Tab` fills it, rows are clickable. Plain
+  `↑`/`↓` are left alone for the shell's own history. History is captured
+  locally (200 entries, persisted) — no new host calls or permissions.
+- **Session resilience**:
+  - **Auto-reconnect** (on by default): on `shell/pty-closed` or repeated
+    `shell/input` rejection, RShell retries the handshake on a bounded
+    backoff ladder (0.5→1→2→5 s). The xterm instance is reused, so **the
+    scrollback on screen is never cleared**; notes are appended below it.
+    Auth/permission/host-key failures are recognised and stop the ladder.
+  - **Keep-alive** (opt-in, 1/5/10/30/60 s): keeps an idle NAT/sshd timeout
+    from dropping the session using a **silent `shell/cwd` probe** — no bytes
+    are ever written to the PTY, so nothing echoes, nothing repaints and no
+    phantom line can appear (it is safe inside `vim`/`less` too).
+  - Connection-state pill in the toolbar for Reconnecting / Disconnected /
+    Authentication failed, plus a "Reconnect now" button in Settings.
+- **Premium terminal**:
+  - Theme system with a full 18-token UI palette **and** a complete xterm
+    `ITheme` (16 ANSI + 8 bright + cursor + selection) per theme, applied live
+    without ever touching the byte stream. Themes: **OpenCode (default)**,
+    Tokyo Night, Catppuccin Mocha, Dracula, Nord, Gruvbox Dark, Light. Legacy
+    saved keys migrate automatically.
+  - **Real dark default.** The OpenCode theme is the neutral near-black palette
+    from OpenCode's own default theme — `#0a0a0a` surface, `#030303` bar,
+    `#141414`/`#1e1e1e` raised panels, `#eeeeee` text, `#808080` muted,
+    `#484848` borders, `#9d7cd8` accent, `#fab283` cursor — with no blue cast,
+    and every terminal layer painted the same colour so no lighter surface can
+    flash through on a repaint.
+  - Coding-font stack (JetBrains Mono → Cascadia Code → Fira Code → Consolas),
+    13.5 px default (9–24), line height 1.00–1.80, cursor style + blink,
+    configurable scrollback (default 5 000).
+  - Clickable URLs, `Ctrl`/`Cmd`+`F` search with match count, context menu
+    (Copy/Paste/Select all/Clear display/Search/Settings), floating copy
+    toolbar, slim 5–6 px scrollbars, 14–16 px padding, reduced-motion support,
+    and a responsive toolbar/overlay layout for tablet and phone.
+- Plus v1.0.0: auto-copy selection (host clipboard bridge), settings via
+  `host.storage`.
+
+## Install (DBX portable, Windows)
+
+> `Plugin package must have a trusted Ed25519 signature` is expected for any
+> non-Store package. Documented dev flow: **Plugin Center → Settings →
+> enable "Allow unsigned development packages"**, then install
+> `dist/net.robrion.robshell.dbxp`.
+> A dev copy is also staged at
+> `D:\DBX\data\plugins\net.robrion.robshell\versions\1.2.1\` (restart DBX to
+> discover it).
+
+## Build / repack
+
+```bash
+cd com.robshell
+# edit files under package/, then:
+python3 /tmp/opencode/pack_robshell.py --stage
+```
+
+`pack_robshell.py` regenerates `package/checksums.json` (sha256 of every other
+file, exactly once), writes `dist/net.robrion.robshell.dbxp` as a zip with
+`manifest.json` + `checksums.json` at the root and directory entries for
+`assets/ bin/ bin/windows-x64/ ui/`, and with `--stage` extracts it to
+`data/plugins/net.robrion.robshell/versions/<version>/`. It refuses to pack
+`signature.json` / `dbx-plugin.toml`.
+
+Tests (they extract the app script from `ui/index.html` first):
+
+```bash
+python3 -c "import re;html=open('package/ui/index.html').read();open('/tmp/opencode/app3.js','w').write(re.findall(r'<script>(.*?)</script>',html,re.S)[-1])"
+node tests/monitor-core.test.js    # 70 parser + reconnect unit tests
+node tests/suggest-core.test.js    # 62 suggestion unit tests
+node tests/theme-core.test.js      # 445 theme token unit tests
+node tests/monitor-harness.js both # 163 integration assertions, 7 scenarios
+```
+
+The official `dbx-plugin package` CLI was evaluated: it requires
+`dbx-plugin.toml` to declare a *buildable* (Rust/Go) backend, which does not
+fit a fork reusing a prebuilt sidecar, so packaging here follows the
+documented `.dbxp` layout rules directly (manifest at root, checksums cover
+every other file exactly once, `bin/windows-x64/`, no symlinks/traversal,
+4.6 MB < 512 MiB limit) and is validated accordingly.
+
+## Test report (2026-10-16, v1.2.1)
+
+- `node --check` on the final UI script: pass.
+- 70/70 monitor unit tests pass (`tests/monitor-core.test.js`): all metric
+  parsers plus the pure reconnect core — backoff ladder
+  (`[500,1000,2000,5000]`, clamping), `keepAliveDue` gating (off by default,
+  never while a sample is in flight or the alt buffer is active) and failure
+  classification (permanent vs inactive vs transient).
+- 445/445 theme unit tests pass (`tests/theme-core.test.js`): seven themes, each
+  with a complete 18-key UI palette and a complete 21-key xterm terminal palette,
+  the OpenCode default asserted value-by-value against the upstream dark palette
+  (including that its surface/text greys are channel-neutral, i.e. no blue cast),
+  legacy theme-key migration, `--rs-*` custom-property naming for every UI token,
+  and the font-stack fallbacks.
+- 62/62 suggestion engine unit tests pass (`tests/suggest-core.test.js`):
+  query gating, fuzzy ranking/scoring/tie-breaks, prefix-only ghost semantics
+  (including control-char rejection), input classification (plain + bracketed
+  paste, arrows, control bytes), line model (append/backspace/Ctrl-U/Ctrl-W/
+  Enter/multi-line), first-word chunking, highlight run splitting, state machine.
+- 163/163 headless integration assertions pass
+  (`tests/monitor-harness.js` + `tests/drv-*.js`, real shipped UI code):
+  - exec-rejected (6): `N/A` + both-transport error, RTT alive.
+  - exec-working (14): probe, hostname, CPU/RAM/net/disk/uptime, a periodic
+    refresh (new CPU sample lands), meta-trailer filtering, prompt display,
+    zero marker leak.
+  - sftp-fallback (8): transport switch, full metrics, disk honestly `N/A`.
+  - sftp-disk-recovery (5): disk `N/A` under SFTP, then recovers to a real
+    value once the exec channel works — no reconnect.
+  - paste (10): line counting, direct single-line paste, confirm modal
+    show/OK/Cancel, right-click paste.
+  - suggest (57): engine through the exposed API, the real `term.onData`
+    handler building the line model, inline ghost rendering + echo-driven
+    repositioning, `→`/`Ctrl+→` accept payloads written to the PTY, list
+    rendering, `Tab` fill, `Esc` dismissal, Enter → history commit, and both
+    Settings toggles.
+  - conn (63): theme tokens reach both the chrome (`--rs-*` custom
+    properties + `data-rshell-theme`) and the terminal (full ANSI palette) and
+    retint live on switch; the context menu builds the right items, disables
+    Copy without a selection, closes on Esc, and right-click still pastes when
+    the menu is not invoked; search finds/wraps/no-matches and reports the
+    count; link detection finds URLs and e-mails with 1-based ranges and
+    respects the Links toggle; **keep-alive sends zero `shell/input` payloads**
+    (never `" \x7f"`) and probes with exactly one `shell/cwd` that writes
+    nothing to the terminal — the regression guard for the blinking-line bug —
+    and is safe in the alternate buffer; and the reconnect path re-runs the
+    handshake, restores the session, classifies auth failure as terminal (no
+    reconnect storm), works from the manual button, honours the auto-reconnect
+    toggle — **and never calls `clear()` or emits `\x1b[2J`/`\x1b[3J`**, so the
+    scrollback survives.
+- Package validation: zip entries correct, `checksums.json` covers every other
+  file exactly once (4 files), backend identity consistent
+  (`net.robrion.robshell/1.2.1`, providers `com.robshell.shell.connection` /
+  `com.robshell.ssh.connection`), plugin-id + version strings patched in the
+  sidecar (verified with `objdump`), icon re-parsed (6 PNG entries, 32 KB),
+  `host.clipboard:read` permission declared
+  (needs a host with Host API 1.3+; older hosts may reject the unknown
+  permission at install).
+- NOT performed live (no DBX, Windows, or SSH host, and no headless browser in
+  this environment): the real install, real remote metric accuracy, the
+  rendered terminal/search/context-menu appearance, and Files/Docker
+  regression. If a metric shows `N/A`, hover it for the reason or eval
+  `window.__robshell.snapshot()` in devtools and send the JSON — it now also
+  includes `connState`, `reconAttempt` and `keepAliveSecs`.

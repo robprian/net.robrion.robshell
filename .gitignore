@@ -1,0 +1,8 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+
+# Pre-rename build artifact (plugin id was com.robshell; the shipped id is
+# net.robrion.robshell, so this package can no longer be installed).
+dist/com.robshell.dbxp
