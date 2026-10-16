@@ -1,4 +1,4 @@
-# RShell (net.robrion.robshell v1.3.1)
+# RShell (net.robrion.robshell v1.3.2)
 
 Fork of `com.nintycat.shell` v0.8.4 (NintyShell): local shell and SSH/SFTP
 terminals with auto-copy selection, a premium themed terminal, a real-time
@@ -12,13 +12,14 @@ only the identity strings/version patched in place.
 ```
 com.robshell/               <- repo folder name (historical)
   package/                  <- plugin source (this is what gets zipped)
-    manifest.json           <- id net.robrion.robshell, name RShell, v1.3.0
+    manifest.json           <- id net.robrion.robshell, name RShell, v1.3.2
     checksums.json          <- sha256 of every other file, exactly once
     assets/plugin.ico       <- icon.png artwork, minimized ICO (32 KB)
     bin/windows-x64/dbx-plugin-robshell.exe
     ui/index.html           <- patched UI (chrome + status bar + terminal)
   dist/
     net.robrion.robshell.dbxp  <- installable package (unsigned dev build)
+    com.robshell.dbxp          <- byte-identical alias under the historic name
   dbx-plugin.toml           <- project config for `dbx-plugin package` (CLI)
   tests/
     monitor-core.test.js    <- 70 unit tests: metric parsers + reconnect core
@@ -26,7 +27,8 @@ com.robshell/               <- repo folder name (historical)
     theme-core.test.js      <- 445 unit tests for the theme token palettes
     monitor-harness.js      <- headless integration harness (real UI code)
     drv-*.js                <- per-scenario drivers
-                               (ok/reject/sftp/sftpdisk/paste/suggest/conn/update)
+                               (ok/reject/sftp/sftpdisk/paste/suggest/conn/update/pty)
+    ptycap.json               <- real bash transcript (kernel PTY) replayed by drv-pty.js
   CHANGELOG.md
   README.md (this file)
 ```
@@ -80,8 +82,16 @@ com.robshell/               <- repo folder name (historical)
   PTY, nothing is echoed and your own `PROMPT_COMMAND` is left alone (the file
   panel follows the cwd from the exec meta trailer instead — see
   `CHANGELOG.md` for how the single injection call site was proven).
-- **Update check** (v1.3.0): compares its version with the newest release on
-  `github.com/robprian/net.robrion.robshell` — silent, cached for 6 h — and
+- **Cursor sync** (v1.3.2): the PTY funnel is byte-lossless — monitor bytes
+  never leak into the terminal (a per-tick buffer scan abandons exec for SFTP
+  on the first observed leak), Clear is remote-driven (`^L`), `shell/resize`
+  is sent only on real geometry changes with a forced re-sync per connect,
+  and contended keep-alive probes can't start reconnect storms. Verified by
+  replaying a real bash transcript (`tests/ptycap.json`) through the shipped
+  pipeline — see `CHANGELOG.md`.
+- **Update check** (v1.3.0, keeps watching since v1.3.2): compares its version with the newest release on
+  `github.com/robprian/net.robrion.robshell` — silent, cached for 6 h, re-checked
+  on an interval for long-lived panels — and
   shows a status-bar badge when a newer one exists; click it to open the
   download page. On/off switch and "Check now" under Settings → Updates.
   RShell cannot install itself: unsigned `.dbxp` packages still go through the
@@ -115,7 +125,7 @@ com.robshell/               <- repo folder name (historical)
 > enable "Allow unsigned development packages"**, then install
 > `dist/net.robrion.robshell.dbxp`.
 > A dev copy is also staged at
-> `D:\DBX\data\plugins\net.robrion.robshell\versions\1.3.0\` (restart DBX to
+> `D:\DBX\data\plugins\net.robrion.robshell\versions\1.3.2\` (restart DBX to
 > discover it).
 
 ## Build / repack
@@ -140,7 +150,7 @@ python3 -c "import re;html=open('package/ui/index.html').read();open('/tmp/openc
 node tests/monitor-core.test.js    # 70 parser + reconnect unit tests
 node tests/suggest-core.test.js    # 62 suggestion unit tests
 node tests/theme-core.test.js      # 445 theme token unit tests
-node tests/monitor-harness.js both # 194 integration assertions, 8 scenarios
+node tests/monitor-harness.js both # 210 integration assertions, 9 scenarios
 ```
 
 The official `dbx-plugin package` CLI was evaluated: it requires
@@ -150,7 +160,7 @@ documented `.dbxp` layout rules directly (manifest at root, checksums cover
 every other file exactly once, `bin/windows-x64/`, no symlinks/traversal,
 4.7 MB < 512 MiB limit) and is validated accordingly.
 
-## Test report (2026-10-16, v1.3.0)
+## Test report (2026-10-16, v1.3.2)
 
 - `node --check` on the final UI script: pass.
 - 70/70 monitor unit tests pass (`tests/monitor-core.test.js`): all metric
@@ -169,7 +179,7 @@ every other file exactly once, `bin/windows-x64/`, no symlinks/traversal,
   (including control-char rejection), input classification (plain + bracketed
   paste, arrows, control bytes), line model (append/backspace/Ctrl-U/Ctrl-W/
   Enter/multi-line), first-word chunking, highlight run splitting, state machine.
-- 194/194 headless integration assertions pass
+- 210/210 headless integration assertions pass
   (`tests/monitor-harness.js` + `tests/drv-*.js`, real shipped UI code):
   - exec-rejected (6): `N/A` + both-transport error, RTT alive.
   - exec-working (14): probe, hostname, CPU/RAM/net/disk/uptime, a periodic
@@ -199,27 +209,48 @@ every other file exactly once, `bin/windows-x64/`, no symlinks/traversal,
     reconnect storm), works from the manual button, honours the auto-reconnect
     toggle — **and never calls `clear()` or emits `\x1b[2J`/`\x1b[3J`**, so the
     scrollback survives.
-  - update (32): the release feed is queried once at boot with the GitHub media
+  - update (31): the release feed is queried once at boot with the GitHub media
     type and an abort signal; a newer tag shows the status-bar badge (and the
     version in Settings), while an equal, older or malformed tag never does; a
     blocked request resolves to an error state without throwing; the switch
     gates the request; and — **the regression guard for this release — no
     `shell/config` call is ever made and no `injectOsc7` flag is ever sent**,
     while `shell/cwd` still drives the handshake and the known cwd.
+  - pty (16): **a real bash transcript is replayed byte-for-byte**
+    (`tests/ptycap.json`: kernel PTY, readline echo, a multiplexed exec block
+    with a real `/proc/stat` payload, `^L` redraw, resize, UTF-8). With a
+    flight open the exec block is consumed for metrics while every interactive
+    byte lands exactly once — no marker leak, Enter commits exactly once, the
+    clear-redraw escape sequence and multibyte UTF-8 survive intact, and no
+    phantom trailing newline is appended; with no flight the guard passes the
+    same bytes through unchanged. Plus: `shell/resize` is sent only on real
+    geometry changes, Clear sends `^L` to the remote (never `term.clear()`),
+    and a contended keep-alive probe neither errors nor reconnects.
 - Package validation: zip entries correct, `checksums.json` covers every other
   file exactly once (4 files), backend identity consistent
-  (`net.robrion.robshell/1.3.0`, providers `com.robshell.shell.connection` /
+  (`net.robrion.robshell/1.3.2`, providers `com.robshell.shell.connection` /
   `com.robshell.ssh.connection`), plugin-id + version strings patched in the
-  sidecar (verified with `objdump`), icon re-parsed (6 PNG entries, 32 KB),
-  `host.clipboard:read` permission declared
-  (needs a host with Host API 1.3+; older hosts may reject the unknown
-  permission at install).
-- Release: `v1.3.0` published on `github.com/robprian/net.robrion.robshell` with
-  `net.robrion.robshell.dbxp` + `SHA256SUMS.txt`. The published bytes were
-  re-downloaded and hashed back to the validated build
-  (`6b87f089…cba645`), and the exact endpoint the plugin calls
-  (`/releases/latest`, no auth) returns `tag_name: v1.3.0` with
-  `access-control-allow-origin: *`, so the sandboxed `fetch` passes CORS.
+  sidecar (single `1.3.2` occurrence at the known offset, identity untouched),
+  icon re-parsed (6 PNG entries, 32 KB),
+  `host.clipboard:read` + `host.network:https://api.github.com` permissions declared.
+- Release: `v1.3.2` published on `github.com/robprian/net.robrion.robshell` with
+  `net.robrion.robshell.dbxp`, its byte-identical alias `com.robrion.robshell.dbxp`,
+  and `SHA256SUMS.txt`. The published bytes were
+  re-downloaded and hashed back to the validated build,
+  and the exact endpoint the plugin calls
+  (`/releases/latest`, no auth) returns the new tag with
+  `access-control-allow-origin: *`, so the sandboxed `fetch` passes CORS and
+  installed v1.3.1 panels show the upgrade badge within 6 h.
+- Half-live verification: no DBX/Windows/SSH host exists in this environment,
+  so instead of eyeballing a session the exact terminal byte pipeline was
+  proven against a real interactive shell — bash under a kernel PTY with
+  readline echo — replayed through the shipped code (16/16 pty assertions).
+  The SSH transport itself is DBX's closed backend and is out of reach here.
+  NOT performed: the real install, real remote metric accuracy, and the
+  rendered appearance. If anything still drifts, eval
+  `window.__robshell.snapshot()` in devtools and send the JSON — it now also
+  includes `termCols`, `termRows`, `execUnsafe` and `execLeaks`, and
+  `window.__robshell.update.state()` reports the release check.
 - NOT performed live (no DBX, Windows, or SSH host, and no headless browser in
   this environment): the real install, a real SSH session (so the prompt fix is
   proven by binary analysis + regression tests, not by eye), real remote metric
@@ -228,3 +259,6 @@ every other file exactly once, `bin/windows-x64/`, no symlinks/traversal,
   `window.__robshell.snapshot()` in devtools and send the JSON — it now also
   includes `connState`, `reconAttempt` and `keepAliveSecs`, and
   `window.__robshell.update.state()` reports the release check.
+- Superseded history: the v1.3.0/v1.3.1 verification notes (binary `pclntab`
+  analysis of the single `injectOsc7` call site, first release upload) are kept
+  in `CHANGELOG.md` and the git history (`v1.3.0`, `v1.3.1` tags + releases).

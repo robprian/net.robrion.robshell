@@ -199,6 +199,12 @@ function runScenarioReal(mode) {
       F2: "cpu  150 0 80 900 30 0 0 0 0 0\n__RM__\nMemTotal:        1740244 kB\nMemFree:          200112 kB\nMemAvailable:   1087620 kB\nBuffers:           48132 kB\nCached:           700220 kB\nSwapTotal:        998396 kB\nSwapFree:         998396 kB\n__RN__\nInter-|   Receive  | Transmit\n face |bytes packets|bytes packets\n  eth0: 3000 30 0 0 0 0 0 0 6000 40 0 0 0 0 0 0\n__RL__\n0.15 0.10 0.05 1/200 1\n",
       SL: "Filesystem 1B-blocks Used Available Use% Mounted on\n/dev/vda1 21474836480 14173392000 7300000000 66% /\n__DU__\n73500.12 123456.00\n"
     };
+    // Real kernel-PTY transcript (tests/ptycap.json, captured from bash under
+    // python pty): prompt, typing echo, a multiplexed exec block, ^L redraw,
+    // resize, UTF-8. Absent (e.g. packaged runs) -> the pty driver SKIPs.
+    try {
+      sandbox.__ptycap = JSON.parse(fs.readFileSync(path.join(__dirname, "ptycap.json"), "utf-8"));
+    } catch (_) { sandbox.__ptycap = null; }
     vm.createContext(sandbox);
     const htmlForIds = fs.readFileSync(path.join(__dirname, "..", "package", "ui", "index.html"), "utf-8");
     const hiddenIds = new Set([...htmlForIds.matchAll(/<[^>]*\sid="([^"]+)"[^>]*?(\shidden[\s>])/g)].map((m) => m[1]));
@@ -214,7 +220,7 @@ function runScenarioReal(mode) {
     const fast1 = fastSample(STAT1, NET1);
     const fast2 = fastSample(STAT2, NET2);
     const slowS = DF + "__DU__\n" + UP;
-    const driverFiles = { ok: "drv-ok.js", reject: "drv-reject.js", sftp: "drv-sftp.js", paste: "drv-paste.js", sftpdisk: "drv-sftpdisk.js", suggest: "drv-suggest.js", conn: "drv-conn.js", update: "drv-update.js" };
+    const driverFiles = { ok: "drv-ok.js", reject: "drv-reject.js", sftp: "drv-sftp.js", paste: "drv-paste.js", sftpdisk: "drv-sftpdisk.js", suggest: "drv-suggest.js", conn: "drv-conn.js", update: "drv-update.js", pty: "drv-pty.js" };
     if (!driverFiles[mode]) throw new Error("unknown mode " + mode + " (debug removed; use ok)");
     const driver = fs.readFileSync(path.join(__dirname, driverFiles[mode]), "utf-8");
     try {
@@ -228,7 +234,7 @@ function runScenarioReal(mode) {
 
 (async () => {
   const arg = process.argv[2] || "both";
-  const modes = arg === "both" ? ["reject", "ok", "sftp", "sftpdisk", "paste", "suggest", "conn", "update"] : [arg];
+  const modes = arg === "both" ? ["reject", "ok", "sftp", "sftpdisk", "paste", "suggest", "conn", "update", "pty"] : [arg];
   let failed = 0;
   for (const m of modes) {
     console.log("=== scenario: " + m + " ===");

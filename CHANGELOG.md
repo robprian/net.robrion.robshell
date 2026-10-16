@@ -1,5 +1,46 @@
 # Changelog — RShell (`net.robrion.robshell`)
 
+## 1.3.2 — cursor-sync funnel fixes + exec safety latch (2026-10-16)
+
+Root-cause pass over every path that can move the cursor without the user.
+Verified byte-for-byte against a REAL bash transcript (kernel PTY, readline
+echo, multiplexed exec block, `^L` redraw, resize, UTF-8 — `tests/ptycap.json`,
+replayed through the shipped pipeline in `tests/drv-pty.js`).
+
+### The terminal funnel is now lossless
+
+- `monTapChunk` no longer swallows out-of-block bytes when the exec markers
+  never appear (the v1.3.1 inversion: with exec on a separate channel the PTY
+  stream holds only user traffic, and dropping it made typed text vanish
+  mid-sample). Interactive bytes always reach the terminal; a genuine exec
+  leak is caught per-tick by the buffer scan instead.
+- `monFinishFlight` rebuilds its remainder byte-exactly: no trailing `"\n"`
+  is appended to the partial tail (usually the prompt). That appended newline
+  scrolled the prompt down one line on every sample — the continuous drift.
+- Every exec sample (`fast`, `disk`, `uptime`, `sysinfo`) now scans the
+  terminal buffer for its own begin marker afterwards. One observed leak sets
+  the sticky `mon.execUnsafe` latch and abandons exec for the page session,
+  falling back to SFTP (which never touches the PTY) — a leak can scroll at
+  most once, never every 2 s. `snapshot()` reports `execUnsafe`/`execLeaks`.
+
+### No more self-inflicted repaints or storms
+
+- Clear is remote-driven: the toolbar button and the context-menu item send
+  `^L` through `shell/input` so the REMOTE clears and repaints the prompt
+  instead of `term.clear()` wiping the viewport out from under it.
+- `shell/resize` is sent only on real geometry changes (deduped by
+  `lastPtySize`), the zero-width re-arm loop is bounded, and every
+  (re)connect forces one authoritative geometry re-sync.
+- A contended keep-alive probe (`another command is still running`, `busy`,
+  `timeout`) no longer feeds the reconnect ladder — it was starting reconnect
+  storms (notes + re-handshake + monitor reprobe) on loaded hosts.
+
+### Update check keeps watching
+
+- The 6 h release probe now also runs on an interval, so long-lived panels
+  notice releases published after boot. Also fixed a latent crash where the
+  boot call chained `.catch()` onto the checker's string fast-path return.
+
 ## 1.3.1 — terminal fit + leak guard (2026-10-16)
 
 ### A running monitor can no longer scroll the terminal
