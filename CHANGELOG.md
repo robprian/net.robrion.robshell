@@ -1,5 +1,20 @@
 # Changelog — RShell (`net.robrion.robshell`)
 
+## 1.3.1 — terminal fit + leak guard (2026-10-16)
+
+### A running monitor can no longer scroll the terminal
+- `monTapChunk` (the closure around an in-flight exec sample) now **discards its
+  out-of-block residue when the begin/end markers never matched** instead of
+  writing it to the PTY. On some login hosts/exec styles the echoed wrapper
+  does not parse cleanly; the residue was 5–15 lines per tick and scrolled the
+  prompt away on every sample — the "cursor keeps going down / can't type"
+  symptom.
+- Monitoring also **refits the xterm surface defensively**: if the DBX host hands
+  us a still-zero-width container on the first frame, the resize re-arms three
+  times (120 ms, then 600 ms, and as long as the container has no real width)
+  instead of committing a 1-column terminal that wraps every keystroke to a
+  new line.
+
 ## 1.3.0 — prompt corruption fixed + release check (2026-10-16)
 
 ### The prompt no longer gets rewritten behind your back

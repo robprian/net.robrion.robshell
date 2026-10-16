@@ -1,4 +1,4 @@
-# RShell (net.robrion.robshell v1.3.0)
+# RShell (net.robrion.robshell v1.3.1)
 
 Fork of `com.nintycat.shell` v0.8.4 (NintyShell): local shell and SSH/SFTP
 terminals with auto-copy selection, a premium themed terminal, a real-time

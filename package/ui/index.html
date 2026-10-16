@@ -2392,7 +2392,7 @@
       // for it; when the host withholds that permission the request rejects and
       // the check degrades to "off" instead of breaking anything.
       // -------------------------------------------------------------------
-      const CURRENT_VERSION = "1.3.0";
+      const CURRENT_VERSION = "1.3.1";
       const UPDATE_REPO = "robprian/net.robrion.robshell";
       const UPDATE_API = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
       const UPDATE_PAGE = "https://github.com/" + UPDATE_REPO + "/releases/latest";
@@ -2970,7 +2970,21 @@
         clearTimeout(ptyResizeTimer);
         ptyResizeTimer = setTimeout(() => {
           try {
+            // DBX can hand us a host panel whose width is still 0 on the first
+            // frame (the container is hidden or laid out later). Fitting then
+            // leaves the terminal with 1 column, which collapses every
+            // keystroke into one-character lines. Re-arm instead of committing
+            // a degenerate size; never propagate cols < 2.
+            const host = ptyHost;
+            if (!host || !host.clientWidth || host.clientWidth < 16 || !host.clientHeight) {
+              ptyResizeTimer = setTimeout(schedulePtyResize, 100);
+              return;
+            }
             fitAddon.fit();
+            if (!term.cols || term.cols < 2 || !term.rows || term.rows < 2) {
+              ptyResizeTimer = setTimeout(schedulePtyResize, 250);
+              return;
+            }
             window.dbxPlugin.invoke("shell/resize", { connectionId, cols: term.cols, rows: term.rows }).catch(() => {});
             if (typeof sugPosition === "function") sugPosition();
           } catch (error) { /* ignore */ }
@@ -2997,6 +3011,8 @@
         term.loadAddon(fitAddon);
         term.open(ptyHost);
         fitAddon.fit();
+        setTimeout(() => { try { schedulePtyResize(); } catch (_) {} }, 120);
+        setTimeout(() => { try { schedulePtyResize(); } catch (_) {} }, 600);
         installLinkProvider(term);
         term.onData((data) => {
           mon.lastInput = Date.now();
@@ -5971,6 +5987,14 @@ function sugHighlight(command, indices) {
           if (f.inBlock) { f.buf += line + "\n"; continue; }
           out += line + "\n";
         }
+        // Guard: if begin/end never matched (some login hosts echo the wrapper
+        // differently), suppress the out-of-block residue instead of letting it
+        // scroll the PTY and wash away what the user is typing.
+        if (out && !f.sawEnd) {
+          if (!f.missedMarkerCount) f.missedMarkerCount = 0;
+          f.missedMarkerCount += 1;
+          return new Uint8Array(0);
+        }
         if (!out) return new Uint8Array(0);
         try { return new TextEncoder().encode(out); } catch (_) { return new Uint8Array(0); }
       }
@@ -7388,6 +7412,8 @@ function sugHighlight(command, indices) {
             connState: recon.state,
             reconAttempt: recon.attempt,
             keepAliveSecs: Number(settings.keepAliveSecs) || 0,
+            termCols: term ? term.cols : null,
+            termRows: term ? term.rows : null,
           }),
           reconnect: () => { recon.attempt = 0; reconAttempt(); },
           connState: () => recon.state,
