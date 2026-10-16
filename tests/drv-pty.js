@@ -79,6 +79,8 @@
   try {
     await waitFor(() => typeof term !== "undefined" && term && ptyMode === true && termReady === true, 6000, "pty ready");
     await sleep(2500); // let the (failing) monitor probe + sftp probe settle
+    const bootSizes = __resizeCalls.filter((size) => size.cols === 80 && size.rows === 24);
+    ok("pty: initial geometry is propagated exactly once", bootSizes.length === 1);
     ptyHost.clientWidth = 1200;
     ptyHost.clientHeight = 800;
 
@@ -173,6 +175,50 @@
       const combined = Buffer.from(Buffer.from(before, "base64").toString("utf8") + expGuard, "utf8").toString("base64");
       ok("ptyreal: guard passes real bytes through unchanged", writesB64() === combined);
     }
+    // Request/response exec completion must not discard an unfinished PTY prompt.
+    monStop();
+    window.dbxPlugin.invoke = async (m, p) => {
+      if (m === "shell/exec") {
+        await sleep(250);
+        const markers = p.command.match(/__RM[0-9a-z]{6}[BE]__/g);
+        return { output: markers[0] + "\nok\n" + markers[1] + "\n" };
+      }
+      return origInvoke(m, p);
+    };
+    let start = __writes.length;
+    const request = execMon("printf ok", 2000);
+    fireBytes(Buffer.from("prompt$ ").toString("base64"));
+    await request;
+    fireBytes(Buffer.from("typed").toString("base64"));
+    await sleep(250);
+    ok("pty: direct exec result preserves prompt and typing in order",
+      __writes.slice(start).join("") === "prompt$ typed");
+
+    // A slow, fragmented metric line must stay suppressed past the flush timer.
+    start = __writes.length;
+    fireBytes(Buffer.from("__RMabc123B__\nmetric-part").toString("base64"));
+    await sleep(250);
+    fireBytes(Buffer.from("-rest\n__RMabc123E__\nprompt$ ").toString("base64"));
+    await sleep(250);
+    ok("pty: partial monitor payload never escapes on the flush timer",
+      __writes.slice(start).join("") === "prompt$ ");
+
+    start = __writes.length;
+    fireBytes(Buffer.from("pending$ ").toString("base64"));
+    monStop();
+    await sleep(250);
+    ok("pty: stopping monitoring preserves a pending prompt",
+      __writes.slice(start).join("") === "pending$ ");
+
+    window.dbxPlugin.invoke = async (m, p) => {
+      if (m === "shell/exec") return {};
+      return origInvoke(m, p);
+    };
+    const stopped = execMon("printf ok", 2000).then(() => false, () => true);
+    const flight = mon.flight;
+    monStop();
+    ok("pty: stopping monitoring settles its flight", await stopped);
+    ok("pty: stopping monitoring cancels its deadline", flight.done && flight.timer._destroyed);
   } catch (e) {
     out.push("FAIL harness: " + (e && e.message) + "\n" + String((e && e.stack) || "").split("\n").slice(0, 6).join("\n"));
   }

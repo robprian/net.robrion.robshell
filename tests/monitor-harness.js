@@ -105,12 +105,14 @@ function runScenarioReal(mode) {
       return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) };
     };
     let fireEvent = null;
+    const resizeCalls = [];
     const dbxPlugin = {
       ready: Promise.resolve(),
       context: { connectionId: "c1", connectionName: "Shell" },
       locale: "en",
       capabilities: {},
       invoke: async (method, params) => {
+        if (method === "shell/resize") resizeCalls.push({ cols: params.cols, rows: params.rows });
         if (method === "shell/cwd") return { kind: "ssh", cwd: "/root", home: "/root", shell: "/bin/bash", sid: "s1" };
         if (method === "shell/exec") {
           if (mode === "ok" || (mode === "sftpdisk" && sandbox.__execOk)) return {};
@@ -164,7 +166,7 @@ function runScenarioReal(mode) {
       // tests/drv-update.js installs its own fetch to drive the happy paths.
       fetch: null,
       window: null, document: null, Buffer,
-      __writes: writes, __mode: mode, __clipText: "",
+      __writes: writes, __resizeCalls: resizeCalls, __mode: mode, __clipText: "",
       __setClip: null,
       __execOk: false,
       __fixtures: null, // set below

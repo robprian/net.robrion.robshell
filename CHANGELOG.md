@@ -1,5 +1,16 @@
 # Changelog — RShell (`net.robrion.robshell`)
 
+## 1.3.4 — stable PTY output and monitor isolation (2026-10-16)
+
+### Fixed
+
+- PTY output now passes through one permanent guard to xterm's native write queue. Monitor flights only observe metric blocks; direct exec responses, errors, and timeouts cannot discard an unfinished prompt or replay it after newer output.
+- The partial-line flush no longer emits bytes from an open monitor block or a recognized unfinished marker/trailer. Previously, a monitor payload fragmented by more than 150 ms could escape suppression and move the cursor during idle polling.
+- Monitoring restarts preserve the terminal guard, UTF-8 decoder, and pending prompt flush. Stopping monitoring settles an outstanding exec flight and cancels its deadlines.
+- Added failing-before/fixed-after VM regressions for direct-response prompt loss and delayed partial metric leakage, plus shutdown coverage. These are simulated bridge/xterm checks; live DBX idle, SSH commands, full-screen TUIs, tab switching, and visual validation remain unavailable because this session exposes no DBX MCP or browser tools.
+- Initial xterm fitting now uses the same deduplicated resize path as later layout changes. This removes the extra untracked `shell/resize` that could make the remote PTY repaint the prompt twice and contribute to cursor drift.
+- Added a regression assertion that initial `80x24` geometry reaches the backend exactly once.
+
 ## 1.3.2 — cursor-sync funnel fixes + exec safety latch (2026-10-16)
 
 Root-cause pass over every path that can move the cursor without the user.
@@ -30,7 +41,9 @@ replayed through the shipped pipeline in `tests/drv-pty.js`).
   instead of `term.clear()` wiping the viewport out from under it.
 - `shell/resize` is sent only on real geometry changes (deduped by
   `lastPtySize`), the zero-width re-arm loop is bounded, and every
-  (re)connect forces one authoritative geometry re-sync.
+  (re)connect forces one authoritative geometry re-sync. Initial xterm fitting
+  now uses that same debounced path rather than sending an extra untracked
+  resize that caused the remote PTY to repaint the prompt twice.
 - A contended keep-alive probe (`another command is still running`, `busy`,
   `timeout`) no longer feeds the reconnect ladder — it was starting reconnect
   storms (notes + re-handshake + monitor reprobe) on loaded hosts.

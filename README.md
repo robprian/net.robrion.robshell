@@ -1,4 +1,4 @@
-# RShell (net.robrion.robshell v1.3.2)
+# RShell (net.robrion.robshell v1.3.4)
 
 Fork of `com.nintycat.shell` v0.8.4 (NintyShell): local shell and SSH/SFTP
 terminals with auto-copy selection, a premium themed terminal, a real-time
@@ -12,7 +12,7 @@ only the identity strings/version patched in place.
 ```
 com.robshell/               <- repo folder name (historical)
   package/                  <- plugin source (this is what gets zipped)
-    manifest.json           <- id net.robrion.robshell, name RShell, v1.3.2
+    manifest.json           <- id net.robrion.robshell, name RShell, v1.3.4
     checksums.json          <- sha256 of every other file, exactly once
     assets/plugin.ico       <- icon.png artwork, minimized ICO (32 KB)
     bin/windows-x64/dbx-plugin-robshell.exe
@@ -82,7 +82,7 @@ com.robshell/               <- repo folder name (historical)
   PTY, nothing is echoed and your own `PROMPT_COMMAND` is left alone (the file
   panel follows the cwd from the exec meta trailer instead — see
   `CHANGELOG.md` for how the single injection call site was proven).
-- **Cursor sync** (v1.3.2): the PTY funnel is byte-lossless — monitor bytes
+- **Cursor sync** (v1.3.4): the PTY funnel is byte-lossless — monitor bytes
   never leak into the terminal (a per-tick buffer scan abandons exec for SFTP
   on the first observed leak), Clear is remote-driven (`^L`), `shell/resize`
   is sent only on real geometry changes with a forced re-sync per connect,
@@ -160,7 +160,7 @@ documented `.dbxp` layout rules directly (manifest at root, checksums cover
 every other file exactly once, `bin/windows-x64/`, no symlinks/traversal,
 4.7 MB < 512 MiB limit) and is validated accordingly.
 
-## Test report (2026-10-16, v1.3.2)
+## Test report (2026-10-16, v1.3.4)
 
 - `node --check` on the final UI script: pass.
 - 70/70 monitor unit tests pass (`tests/monitor-core.test.js`): all metric
@@ -228,12 +228,12 @@ every other file exactly once, `bin/windows-x64/`, no symlinks/traversal,
     and a contended keep-alive probe neither errors nor reconnects.
 - Package validation: zip entries correct, `checksums.json` covers every other
   file exactly once (4 files), backend identity consistent
-  (`net.robrion.robshell/1.3.2`, providers `com.robshell.shell.connection` /
+  (`net.robrion.robshell/1.3.4`, providers `com.robshell.shell.connection` /
   `com.robshell.ssh.connection`), plugin-id + version strings patched in the
-  sidecar (single `1.3.2` occurrence at the known offset, identity untouched),
+  sidecar (single `1.3.4` occurrence at the known offset, identity untouched),
   icon re-parsed (6 PNG entries, 32 KB),
   `host.clipboard:read` + `host.network:https://api.github.com` permissions declared.
-- Release: `v1.3.2` published on `github.com/robprian/net.robrion.robshell` with
+- Previous release: `v1.3.2` published on `github.com/robprian/net.robrion.robshell` with
   `net.robrion.robshell.dbxp`, its byte-identical alias `com.robrion.robshell.dbxp`,
   and `SHA256SUMS.txt`. The published bytes were
   re-downloaded and hashed back to the validated build,
@@ -244,7 +244,7 @@ every other file exactly once, `bin/windows-x64/`, no symlinks/traversal,
 - Half-live verification: no DBX/Windows/SSH host exists in this environment,
   so instead of eyeballing a session the exact terminal byte pipeline was
   proven against a real interactive shell — bash under a kernel PTY with
-  readline echo — replayed through the shipped code (16/16 pty assertions).
+  readline echo — replayed through the shipped code (22/22 pty assertions).
   The SSH transport itself is DBX's closed backend and is out of reach here.
   NOT performed: the real install, real remote metric accuracy, and the
   rendered appearance. If anything still drifts, eval

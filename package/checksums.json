@@ -2,8 +2,8 @@
   "algorithm": "sha256",
   "files": {
     "assets/plugin.ico": "ff0d0424eb2ded60f83a4f1c63eeb62d4792d8bc5e3cd42c5ae09f5b67ae8624",
-    "bin/windows-x64/dbx-plugin-robshell.exe": "d1a2e6dc5f2565a9cb9fe3548a77562d8d8cd025552bc5daa5002e177b1ea1d8",
-    "manifest.json": "5c5482f46c7ab23f28509c1b4ccd77098c9cecebea977c9c8f1182e28b7bc205",
-    "ui/index.html": "8714b38462cf6dbdb38f0ae1d017d395ba293cc70b3a5e1d9fb1086e08f2dcdf"
+    "bin/windows-x64/dbx-plugin-robshell.exe": "a7e3dd2f21cd9bc75960a5d7a70cbdea9ef5b3347b6b90460e7f999e97d3996f",
+    "manifest.json": "9c4a61610b78b124653ca6a33e08cfb3669359bf283c3e4ab681303751090c19",
+    "ui/index.html": "e10f4bbb9bff55104dddac7791e8c8399bd89fbd4340c078bcaff4d922123bef"
   }
 }

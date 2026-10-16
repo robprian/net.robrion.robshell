@@ -2392,7 +2392,7 @@
       // for it; when the host withholds that permission the request rejects and
       // the check degrades to "off" instead of breaking anything.
       // -------------------------------------------------------------------
-      const CURRENT_VERSION = "1.3.2";
+      const CURRENT_VERSION = "1.3.4";
       const UPDATE_REPO = "robprian/net.robrion.robshell";
       const UPDATE_API = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
       const UPDATE_PAGE = "https://github.com/" + UPDATE_REPO + "/releases/latest";
@@ -3130,7 +3130,7 @@
         ptyPending.length = 0;
         requestAnimationFrame(() => {
           fitAddon.fit();
-          window.dbxPlugin.invoke("shell/resize", { connectionId, cols: term.cols, rows: term.rows }).catch(() => {});
+          schedulePtyResize();
         });
         window.addEventListener("resize", schedulePtyResize);
         new ResizeObserver(schedulePtyResize).observe(ptyHost);
@@ -3288,12 +3288,10 @@
             // Every chunk passes the permanent guard, whether or not a monitor
             // exec is in flight: a flight only *consumes* the payload for the
             // metrics, it must never decide whether output reaches the terminal.
-            let rest = bytes;
-            if (mon.flight) {
-              rest = monTapChunk(bytes);
-              if (!rest || !rest.length) return;
-            }
-            monPtyOut(monPtyGuard(rest));
+            // Metrics observe the stream; only the guard owns PTY delivery.
+            // Exec completion must never release or discard a prompt.
+            if (mon.flight) monTapChunk(bytes);
+            monPtyOut(monPtyGuard(bytes));
             return;
           }
           if (!currentOut || !decoder) return;
@@ -5923,8 +5921,8 @@ function sugHighlight(command, indices) {
             buf: "", tail: "", inBlock: false, done: false, timer: null,
             dec: new TextDecoder(), resolve: null, reject: null
           };
-          f.resolve = (val) => { if (f.done) return; f.done = true; clearTimeout(f.timer); if (mon.flight === f) mon.flight = null; resolve(val); };
-          f.reject = (err) => { if (f.done) return; f.done = true; clearTimeout(f.timer); if (mon.flight === f) mon.flight = null; reject(err); };
+          f.resolve = (val) => { if (f.done) return; f.done = true; clearTimeout(f.timer); clearTimeout(f.endTimer); if (mon.flight === f) mon.flight = null; resolve(val); };
+          f.reject = (err) => { if (f.done) return; f.done = true; clearTimeout(f.timer); clearTimeout(f.endTimer); if (mon.flight === f) mon.flight = null; reject(err); };
           mon.flight = f;
           f.timer = setTimeout(() => f.reject(new Error("timeout")), timeoutMs || 8000);
           let full = "printf '%s\\n' " + f.begin + "; " + cmd + "; printf '%s\\n' " + f.end;
@@ -6001,7 +5999,8 @@ function sugHighlight(command, indices) {
             try { clearTimeout(mon.ptyFlush); } catch (_) {}
             const held = mon.guard.tail;
             mon.ptyFlush = setTimeout(() => {
-              if (mon.guard && mon.guard.tail === held && held) {
+              if (mon.guard && mon.guard.tail === held && held && !mon.guard.guard &&
+                  !/__RM|__DBX_META__/.test(held)) {
                 mon.guard.tail = "";
                 try { monPtyOut(new TextEncoder().encode(held)); } catch (_) {}
               }
@@ -6013,12 +6012,11 @@ function sugHighlight(command, indices) {
       }
       function monTapChunk(bytes) {
         const f = mon.flight;
-        if (!f) return bytes;
+        if (!f) return;
         let s = "";
-        try { s = f.dec.decode(bytes, { stream: true }); } catch (_) { return bytes; }
+        try { s = f.dec.decode(bytes, { stream: true }); } catch (_) { return; }
         const parts = (f.tail + s).split("\n");
         f.tail = parts.pop();
-        let out = "";
         for (const line of parts) {
           // Backend wraps every exec with a __DBX_META__ trailer carrying
           // exit code + cwd. It must never reach the terminal in PTY mode;
@@ -6042,18 +6040,7 @@ function sugHighlight(command, indices) {
             continue;
           }
           if (f.inBlock) { f.buf += line + "\n"; continue; }
-          out += line + "\n";
         }
-        // NOTE (cursor sync): out-of-block bytes are interactive traffic here —
-        // the prompt, the echo of what is typed, the output of the user's own
-        // commands — whenever the exec payload travels on a separate channel
-        // and never appears in this stream. They must ALWAYS reach the
-        // terminal. Swallowing them made typed text vanish mid-sample; a real
-        // exec leak (markers fragmented so the block never opens) is caught
-        // per-tick by the terminal-buffer scan in monExecSample, which
-        // abandons the exec transport instead of hiding user traffic.
-        if (!out) return new Uint8Array(0);
-        try { return new TextEncoder().encode(out); } catch (_) { return new Uint8Array(0); }
       }
 
       function monFinishFlight(params) {
@@ -6066,24 +6053,14 @@ function sugHighlight(command, indices) {
         try { tail = f.dec.decode(); } catch (_) {}
         const rest = (f.tail + (tail || "")).split("\n");
         f.tail = "";
-        // Byte-exact remainder: rejoin kept lines with the same separators and
-        // add NO trailing newline. The tail is a partial line (usually the
-        // prompt, which has no line ending); appending "\n" here scrolled the
-        // prompt down one line on EVERY sample — the continuous drift.
-        const afterParts = [];
         for (let li = 0; li < rest.length; li++) {
           const line = rest[li];
-          const isLast = li === rest.length - 1;
-          if (!line) { if (!isLast) afterParts.push(""); continue; }
+          if (!line) continue;
           if (!f.inBlock && line.indexOf(f.begin) >= 0) { f.inBlock = true; continue; }
           if (f.inBlock && line.indexOf(f.end) >= 0) { f.inBlock = false; f.sawEnd = true; continue; }
           if (f.inBlock) f.buf += line + "\n";
-          else afterParts.push(line);
         }
-        const after = afterParts.join("\n");
-        if (after) {
-          try { monPtyOut(monPtyGuard(new TextEncoder().encode(after))); } catch (_) {}
-        }
+        // Interactive remainder was already delivered by the guard at ingress.
         const ok = !params || typeof params.exitCode !== "number" || params.exitCode === 0;
         if (params && params.cwd) monApplyCwd(params.cwd);
         else if (mon.pendingCwd) { monApplyCwd(mon.pendingCwd); mon.pendingCwd = ""; }
@@ -6234,8 +6211,6 @@ function sugHighlight(command, indices) {
         mon.diskErr = "";
         mon.diskRaw = "";
         mon.sftpDiskTryAt = 0;
-        mon.guard = { tail: "", guard: "" };
-        mon.guardDec = null;
         mon.guardDropped = 0;
         mon.guardWarned = false;
         monSetPhase("loading");
@@ -6324,6 +6299,7 @@ function sugHighlight(command, indices) {
       function monStop() {
         mon.active = false;
         mon.ok = false;
+        if (mon.flight) mon.flight.reject(new Error("monitor stopped"));
         mon.flight = null;
         for (const k of ["tFast", "tSlow", "tRtt", "tRetry", "tWatch"]) {
           if (mon[k]) { clearInterval(mon[k]); mon[k] = null; }
@@ -6342,8 +6318,8 @@ function sugHighlight(command, indices) {
         mon.execError = "";
         mon.sftpError = "";
         mon.pendingCwd = "";
-        try { clearTimeout(mon.ptyFlush); } catch (_) {}
-        mon.ptyTail = "";
+        // Guard state and pending PTY bytes belong to the terminal lifetime,
+        // including while monitoring is stopped or restarted.
         monSetPhase("disconnected");
         closeMonLayers();
         monRenderIdle();

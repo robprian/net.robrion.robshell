@@ -3,7 +3,7 @@
   "manifest_version": 1,
   "id": "net.robrion.robshell",
   "name": "RShell",
-  "version": "1.3.2",
+  "version": "1.3.4",
   "publisher": "Robrion",
   "description": "Modern SSH terminal with real-time server monitoring, file management, and Docker integration.",
   "icon": "assets/plugin.ico",
