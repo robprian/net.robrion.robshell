@@ -1,5 +1,51 @@
 # Changelog — RShell (`net.robrion.robshell`)
 
+## 1.3.0 — prompt corruption fixed + release check (2026-10-16)
+
+### The prompt no longer gets rewritten behind your back
+
+- **Root cause of the blank lines, the drifting cursor and the detached
+  prompt.** The UI asked the backend for an OSC 7 working-directory hook
+  (`shell/config { injectOsc7: true }`, sent by `loadSession()` and by the
+  "follow the terminal path" toggle). That flag made the backend write
+  `export PROMPT_COMMAND='printf "\033]7;file://%s\007" "$PWD"'` straight into
+  the **interactive PTY**. The line editor echoed the internal command on
+  screen, re-ran it after every prompt and therefore overwrote the user's own
+  `PROMPT_COMMAND` — the visible internal command, the extra blank lines, the
+  downward cursor drift and the prompt sitting away from the cursor.
+- The backend is closed source, so the write site was found by parsing the Go
+  `pclntab` of the shipped binary and mapping every `E8` call site:
+  `main.injectOsc7Report` has **exactly one caller**, `main.(*plugin).shellConfig`
+  (the `shell/config` handler). `main.(*shellSession).currentCwd` (the
+  `shell/cwd` handler) does **not** call it, and `main.(*osc7Scanner).feed` only
+  *reads* OSC 7 sequences from PTY output. So dropping the request removes the
+  write permanently — no keep-alive probe, RTT tick, timer or reconnect can
+  re-trigger it.
+- Nothing else changed about the session: **no `PROMPT_COMMAND` is set, no
+  `~/.bashrc`/`~/.zshrc` is touched, and no bytes are written to the PTY.**
+- **Following keeps working without the hook.** The file panel already adopts
+  the cwd from the `__DBX_META__<sid>__ <exit> <cwd>` exec trailer
+  (`monMetaTail` → `monApplyCwd`), which is a read-only path — the
+  `shell/cwd-changed` event is now only a bonus when a shell emits OSC 7 by
+  itself.
+
+### Update check
+
+- RShell cannot install itself (DBX installs unsigned `.dbxp` packages through
+  the Plugin Center), so it compares its own version against the newest release
+  on `github.com/robprian/net.robrion.robshell` and, when one is newer, shows a
+  badge in the status bar that opens the download page.
+- Runs **silently and at most once per 6 h**, after the session handshake, so it
+  never delays or blocks a connection; `Settings → Updates` has an on/off switch
+  and a "Check now" button.
+- Version comparison is total and conservative: `1.10.0 > 1.9.9`, `v`-prefixes
+  are accepted, and an unparseable tag (`nightly-build`) or an older release is
+  **never** advertised as an upgrade.
+- The manifest declares `host.network:https://api.github.com`; if the host
+  withholds it the check reports "Could not reach GitHub" and nothing else is
+  affected. GitHub answers the endpoint with `access-control-allow-origin: *`
+  and the unauthenticated rate limit is 60/h, far above one call per 6 h.
+
 ## 1.2.1 — OpenCode dark palette + silent keep-alive (2026-10-16)
 
 ### Dark mode is now real dark
