@@ -731,6 +731,33 @@
         color: var(--rs-fg, inherit);
       }
 
+      [data-rshell-theme="hacker"] #monBar {
+        height: 38px;
+        font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+      }
+      [data-rshell-theme="hacker"] #srvIdentity {
+        padding: 4px 6px;
+        border-radius: 3px;
+        font-family: inherit;
+      }
+      [data-rshell-theme="hacker"] #connName { color: var(--rs-accent); }
+      [data-rshell-theme="hacker"] .metric { font-variant-numeric: tabular-nums; }
+      [data-rshell-theme="hacker"] #monActions button,
+      [data-rshell-theme="hacker"] #btnOverflow,
+      [data-rshell-theme="hacker"] #srvProto,
+      [data-rshell-theme="hacker"] #rsConnState { border-radius: 3px; }
+      [data-rshell-theme="hacker"] #ptyHost .xterm { padding: 10px 12px; }
+      [data-rshell-theme="hacker"] #settingsPanel,
+      [data-rshell-theme="hacker"] .mon-layer,
+      [data-rshell-theme="hacker"] #rsCtxMenu,
+      [data-rshell-theme="hacker"] #rsSearch { border-radius: 6px; }
+      [data-rshell-theme="hacker"] button:focus-visible,
+      [data-rshell-theme="hacker"] select:focus-visible,
+      [data-rshell-theme="hacker"] input:focus-visible {
+        outline: 2px solid var(--rs-accent);
+        outline-offset: 2px;
+      }
+
       /* let the themed surface show through instead of xterm's black viewport */
       .xterm .xterm-viewport {
         background-color: transparent;
@@ -1187,6 +1214,24 @@
           min-width: 40px;
           padding: 4px 9px;
         }
+
+        [data-rshell-theme="hacker"] #monBar {
+          flex-wrap: wrap;
+          height: auto;
+          gap: 6px;
+          padding: 6px 8px;
+          overflow: visible;
+        }
+        [data-rshell-theme="hacker"] #srvIdentity { flex: 1; max-width: none; }
+        [data-rshell-theme="hacker"] #monActions { order: 2; flex: 1 1 100%; }
+        [data-rshell-theme="hacker"] #monActions button {
+          flex: 1;
+          min-width: 0;
+          min-height: 36px;
+          padding: 4px 6px;
+        }
+        [data-rshell-theme="hacker"] #monActions #btnSettings { flex: 0 0 36px; }
+        [data-rshell-theme="hacker"] #monMetrics { order: 3; flex: 1 1 100%; overflow: hidden; }
 
         /* panels become full-width overlays inside the content region */
         #contentRow { position: relative; }
@@ -1729,6 +1774,8 @@
           connConnected: "Connected",
           connReconnecting: "Reconnecting…",
           connDisconnected: "Disconnected",
+          connLoggedOut: "Session ended",
+          connLoggedOutTip: "SSH shell ended. Open a new SSH connection tab to start a new shell.",
           connAuthFailed: "Authentication failed",
           connConnectedTip: "Session is live",
           connReconnectingTip: "Trying to restore the session…",
@@ -1982,6 +2029,8 @@
           connConnected: "已连接",
           connReconnecting: "正在重连…",
           connDisconnected: "已断开",
+          connLoggedOut: "会话已结束",
+          connLoggedOutTip: "SSH Shell 已结束。请从连接列表打开新的 SSH 标签页。",
           connAuthFailed: "认证失败",
           connConnectedTip: "会话已连接",
           connReconnectingTip: "正在尝试恢复会话…",
@@ -2115,8 +2164,28 @@
       // RShell theme tokens. `term` is the complete xterm.js ITheme (ANSI 16 +
       // bright + cursor + selection) so real-colour output is rendered exactly as
       // the shell emits it — nothing in the stream is rewritten. `ui` drives the
-      // app chrome through CSS custom properties (--rs-*). OpenCode is the default.
+      // app chrome through CSS custom properties (--rs-*). Hacker is the default.
       const RS_THEMES = {
+        hacker: {
+          label: "Hacker / Phosphor",
+          dark: true,
+          ui: {
+            bg: "#080c0a", bgBar: "#0c120e", bgElev: "#101813", bgHover: "#1a271e",
+            border: "#35503d", borderSoft: "#233428", fg: "#d6e5d8", fgMuted: "#a2b8a6",
+            fgFaint: "#819986", accent: "#a8ec86", accentSoft: "rgba(168,236,134,0.12)",
+            ok: "#a8ec86", warn: "#f0c674", crit: "#ff8080",
+            scrollTrack: "rgba(168,236,134,0.03)", scrollThumb: "#35503d", scrollThumbHover: "#617b66",
+            selBg: "rgba(168,236,134,0.22)"
+          },
+          term: {
+            background: "#080c0a", foreground: "#d6e5d8", cursor: "#b7f792", cursorAccent: "#080c0a",
+            selectionBackground: "rgba(168,236,134,0.22)",
+            black: "#17231b", red: "#ff8080", green: "#a8ec86", yellow: "#f0c674",
+            blue: "#80bfff", magenta: "#d5a5f5", cyan: "#7ddfce", white: "#c8d6ca",
+            brightBlack: "#829787", brightRed: "#ffabab", brightGreen: "#c4ff9f", brightYellow: "#ffe29a",
+            brightBlue: "#afd7ff", brightMagenta: "#e6c8ff", brightCyan: "#a4f4e5", brightWhite: "#f0fff2"
+          }
+        },
         // Neutral near-black, no blue cast — grounded in the OpenCode default
         // theme (packages/tui/src/theme/assets/v2/opencode.json, `dark` mode).
         // Source tokens: background neutral.800 #0a0a0a, raised #141414 /
@@ -2268,7 +2337,7 @@
           brightBlue: "#4487ff", brightMagenta: "#a855dd", brightCyan: "#18a3b3", brightWhite: "#1f2430"
         }
       };
-      const RS_THEME_ORDER = ["opencode", "tokyoNight", "catppuccinMocha", "dracula", "nord", "gruvboxDark"];
+      const RS_THEME_ORDER = ["hacker", "opencode", "tokyoNight", "catppuccinMocha", "dracula", "nord", "gruvboxDark"];
       const THEME_ORDER = RS_THEME_ORDER.concat(["light"]);
       // Keep every theme's legacy flat fields so older call sites keep working.
       for (const __k of THEME_ORDER) {
@@ -2281,8 +2350,7 @@
         __t.selectionBackground = __t.term.selectionBackground;
       }
       // Saved settings from earlier versions mapped onto the new palette set.
-      // `dark` was the pre-1.2 default and moved to the new default (OpenCode),
-      // so a session that never picked a theme follows the default forward.
+      // Keep historical aliases stable when introducing a new default theme.
       const THEME_ALIASES = {
         dark: "opencode", oneDark: "tokyoNight", monokai: "gruvboxDark",
         solarDark: "nord", solarLight: "light", dracula: "dracula", nord: "nord", light: "light"
@@ -2291,7 +2359,7 @@
       function themeKey(name) {
         if (THEMES[name]) return name;
         const alias = THEME_ALIASES[name];
-        return THEMES[alias] ? alias : "opencode";
+        return THEMES[alias] ? alias : "hacker";
       }
       const FONT_STACKS = {
         default: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
@@ -2303,7 +2371,7 @@
       function cssVarName(name) {
         return "--rs-" + String(name).replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
       }
-      const settingsDefaults = { sftpFollowCwd: true, dblClickNavigate: false, fontSize: 13.5, theme: "opencode", fontFamily: "jetbrains", lineHeight: 1.45, cursorStyle: "block", cursorBlink: true, scrollback: 5000, links: true, autoCopy: true, rightClickPaste: true, suggestOn: true, autoReconnect: true, keepAliveSecs: 0, monOn: true, monCompact: false, monShow: { cpu: true, mem: true, disk: true, net: true, rtt: true, up: true }, monFastMs: 2000, monSlowMs: 10000, monIface: "auto", monWarn: { cpu: 80, mem: 85, disk: 85 }, monSpark: true, monPop: true, pasteConfirm: true, pasteLines: 5, updateCheck: true };
+      const settingsDefaults = { sftpFollowCwd: true, dblClickNavigate: false, fontSize: 13.5, theme: "hacker", fontFamily: "jetbrains", lineHeight: 1.45, cursorStyle: "block", cursorBlink: true, scrollback: 5000, links: true, autoCopy: true, rightClickPaste: true, suggestOn: true, autoReconnect: true, keepAliveSecs: 0, monOn: true, monCompact: false, monShow: { cpu: true, mem: true, disk: true, net: true, rtt: true, up: true }, monFastMs: 2000, monSlowMs: 10000, monIface: "auto", monWarn: { cpu: 80, mem: 85, disk: 85 }, monSpark: true, monPop: true, pasteConfirm: true, pasteLines: 5, updateCheck: true };
       // Bumped when a stored setting has to be re-interpreted once. Revision 1:
       // the pre-1.3 palette default was Tokyo Night; sessions that never picked
       // a theme follow the default forward to OpenCode (still re-selectable).
@@ -2392,7 +2460,7 @@
       // for it; when the host withholds that permission the request rejects and
       // the check degrades to "off" instead of breaking anything.
       // -------------------------------------------------------------------
-      const CURRENT_VERSION = "1.3.5";
+      const CURRENT_VERSION = "1.3.6";
       const UPDATE_REPO = "robprian/net.robrion.robshell";
       const UPDATE_API = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
       const UPDATE_PAGE = "https://github.com/" + UPDATE_REPO + "/releases/latest";
@@ -3042,8 +3110,12 @@
         setTimeout(() => { try { schedulePtyResize(); } catch (_) {} }, 600);
         installLinkProvider(term);
         term.onData((data) => {
+          if (recon.state === "exited") return;
           mon.lastInput = Date.now();
           reconActivity();
+          const submitted = sugApplyLine(sug.line, data).submit;
+          const normalBuffer = !term.buffer || !term.buffer.active || term.buffer.active.type !== "alternate";
+          recon.exitRequestedAt = normalBuffer && ((submitted != null && /^\s*(exit(?:\s+\d+)?|logout)\s*$/.test(submitted)) || (data === "\x04" && !sug.line)) ? Date.now() : 0;
           const bytes = new TextEncoder().encode(data);
           window.dbxPlugin.invoke("shell/input", { connectionId, data: bytesToBase64(bytes) }).catch((err) => onSessionError(err));
           sugInput(data);
@@ -3140,7 +3212,7 @@
       }
 
       let lastSessionError = null;
-      async function loadSession() {
+      async function loadSession(options) {
         lastSessionError = null;
         setDisconnected();
         try {
@@ -3178,7 +3250,15 @@
             // while xterm kept its size; without a resize event the mismatch
             // persists and remote line-wrap desyncs the cursor. Force one
             // authoritative re-sync (deduped by lastPtySize when unchanged).
-            try { lastPtySize = { cols: 0, rows: 0 }; schedulePtyResize(); } catch (_) {}
+            if (options && options.reconnecting) {
+              const size = { cols: term.cols, rows: term.rows };
+              const resized = await window.dbxPlugin.invoke("shell/resize", { connectionId, cols: size.cols, rows: size.rows });
+              if (resized && resized.success === false) throw new Error(resized.message || "PTY is not active");
+              lastPtySize = size;
+              schedulePtyResize();
+            } else {
+              try { lastPtySize = { cols: 0, rows: 0 }; schedulePtyResize(); } catch (_) {}
+            }
             applyView();
             dot.className = "dot ok";
             setRunning(false);
@@ -3197,6 +3277,7 @@
             setRunning(false);
           }
           reconSetState("connected");
+          recon.exitRequestedAt = 0;
           reconActivity();
           reconStartTimers();
           return true;
@@ -3321,7 +3402,7 @@
         }
         if (method === "shell/pty-closed") {
           if (ptyMode && termReady) {
-            reconOnClosed(params.reason || params.error || params.message || "closed");
+            reconOnClosed(params);
           }
           return;
         }
@@ -5992,7 +6073,17 @@ function sugHighlight(command, indices) {
           }
           // Hold the partial line only when a trailer/marker could still be split
           // across chunks (SSH sessions); local PTY output passes straight through.
-          if (markerPrefix) {
+          const tail = mon.guard.tail;
+          const framed = mon.guard.guard || /__RM|__DBX_META__/.test(tail);
+          const ambiguous = ["__RM", "__DBX_META__"].some((prefix) => {
+            for (let n = 1; n < prefix.length; n++) if (tail.endsWith(prefix.slice(0, n))) return true;
+            return false;
+          });
+          if (tail && !framed && !ambiguous) {
+            res.out += tail;
+            mon.guard.tail = "";
+          }
+          if (mon.guard.tail && !framed) {
             try { clearTimeout(mon.ptyFlush); } catch (_) {}
             const held = mon.guard.tail;
             mon.ptyFlush = setTimeout(() => {
@@ -6001,7 +6092,7 @@ function sugHighlight(command, indices) {
                 mon.guard.tail = "";
                 try { monPtyOut(new TextEncoder().encode(held)); } catch (_) {}
               }
-            }, 150);
+            }, 8);
           }
           if (!res.out) return new Uint8Array(0);
           return new TextEncoder().encode(res.out);
@@ -7139,23 +7230,26 @@ function sugHighlight(command, indices) {
       // never cleared or reset for a reconnect.
       const recon = {
         state: "idle", attempt: 0, timer: null, kaTimer: null,
-        lastActivity: 0, detail: null, errCount: 0,
+        lastActivity: 0, detail: null, errCount: 0, exitRequestedAt: 0,
       };
       function reconActivity() { recon.lastActivity = Date.now(); recon.errCount = 0; }
       function syncConnState() {
         if (!rsConnState) return;
         const state = recon.state;
+        if (term) term.options.disableStdin = state === "exited";
+        btnReconnectNow.disabled = state === "exited";
+        btnReconnectNow.title = state === "exited" ? text.connLoggedOutTip : "";
         // The compact status bar keeps its dot; the pill only appears when the
         // session needs attention, so the bar stays quiet while all is well.
-        const show = state === "reconnecting" || state === "disconnected" || state === "authfailed";
+        const show = state === "reconnecting" || state === "disconnected" || state === "authfailed" || state === "exited";
         rsConnState.hidden = !show;
         rsConnState.className = show ? "is-" + state : "";
         if (!show) return;
         rsConnStateText.textContent =
-          state === "reconnecting" ? text.connReconnecting
+          state === "exited" ? text.connLoggedOut : state === "reconnecting" ? text.connReconnecting
             : state === "authfailed" ? text.connAuthFailed : text.connDisconnected;
         rsConnState.title =
-          state === "reconnecting" ? text.connReconnectingTip
+          state === "exited" ? text.connLoggedOutTip : state === "reconnecting" ? text.connReconnectingTip
             : state === "authfailed" ? text.connAuthFailedTip : text.connDisconnectedTip;
       }
       function reconSetState(state, detail) {
@@ -7219,12 +7313,12 @@ function sugHighlight(command, indices) {
         recon.timer = setTimeout(() => { recon.timer = null; reconAttempt(); }, reconDelay(recon.attempt));
       }
       async function reconAttempt() {
-        if (recon.state === "reconnecting") return;
+        if (recon.state === "reconnecting" || recon.state === "exited") return;
         recon.attempt += 1;
         reconSetState("reconnecting");
         reconNote(recon.attempt <= 1 ? text.connReconnecting : text.connAttemptFmt(recon.attempt), "33");
         let ok = false;
-        try { ok = (await loadSession()) !== false; } catch (_) { ok = false; }
+        try { ok = (await loadSession({ reconnecting: true })) !== false; } catch (_) { ok = false; }
         if (ok) {
           recon.attempt = 0;
           reconSetState("connected");
@@ -7239,6 +7333,13 @@ function sugHighlight(command, indices) {
           reconNote(text.connAuthFailed, "31");
           return;
         }
+        if (reconClassify(lastSessionError) === "inactive") {
+          monStop();
+          reconSetState("exited");
+          reconStopTimers();
+          reconNote(text.connLoggedOutTip, "90");
+          return;
+        }
         reconSetState("disconnected");
         reconSchedule();
       }
@@ -7246,7 +7347,16 @@ function sugHighlight(command, indices) {
         if (recon.state === "reconnecting") return;
         reconStopTimers();
         recon.attempt = 0;
-        if (reconClassify(cause) === "permanent") {
+        monStop();
+        const reason = cause && typeof cause === "object" ? (cause.reason || cause.error || cause.message || "closed") : cause;
+        const exited = (recon.exitRequestedAt && Date.now() - recon.exitRequestedAt < 10000) || (cause && typeof cause === "object" && cause.exitCode === 0);
+        if (exited) {
+          reconSetState("exited");
+          reconNote(text.connLoggedOutTip, "90");
+          setDisconnected();
+          return;
+        }
+        if (reconClassify(reason) === "permanent") {
           reconSetState("authfailed");
           reconNote(text.connAuthFailed, "31");
           setDisconnected();

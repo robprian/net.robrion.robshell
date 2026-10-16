@@ -230,7 +230,7 @@ function runScenarioReal(mode) {
     const fast1 = fastSample(STAT1, NET1);
     const fast2 = fastSample(STAT2, NET2);
     const slowS = DF + "__DU__\n" + UP;
-    const driverFiles = { idle: "drv-idle.js", ok: "drv-ok.js", reject: "drv-reject.js", sftp: "drv-sftp.js", paste: "drv-paste.js", sftpdisk: "drv-sftpdisk.js", suggest: "drv-suggest.js", conn: "drv-conn.js", update: "drv-update.js", pty: "drv-pty.js" };
+    const driverFiles = { session: "drv-session.js", idle: "drv-idle.js", ok: "drv-ok.js", reject: "drv-reject.js", sftp: "drv-sftp.js", paste: "drv-paste.js", sftpdisk: "drv-sftpdisk.js", suggest: "drv-suggest.js", conn: "drv-conn.js", update: "drv-update.js", pty: "drv-pty.js" };
     if (!driverFiles[mode]) throw new Error("unknown mode " + mode + " (debug removed; use ok)");
     const driver = fs.readFileSync(path.join(__dirname, driverFiles[mode]), "utf-8");
     try {
@@ -244,7 +244,7 @@ function runScenarioReal(mode) {
 
 (async () => {
   const arg = process.argv[2] || "both";
-  const modes = arg === "both" ? ["reject", "ok", "sftp", "sftpdisk", "paste", "suggest", "conn", "update", "pty", "idle"] : [arg];
+  const modes = arg === "both" ? ["reject", "ok", "sftp", "sftpdisk", "paste", "suggest", "conn", "update", "pty", "idle", "session"] : [arg];
   let failed = 0;
   for (const m of modes) {
     console.log("=== scenario: " + m + " ===");

@@ -39,7 +39,7 @@
   globalThis.fetch = async (url, opts) => {
     fetchCalls.push({ url: String(url), opts: opts || {} });
     if (feed === "fail") throw new Error("blocked by host network policy");
-    const tag = { available: "v1.4.0", current: "v1.3.5", older: "v1.2.0", garbage: "nightly-build" }[feed];
+    const tag = { available: "v1.4.0", current: "v1.3.6", older: "v1.2.0", garbage: "nightly-build" }[feed];
     return {
       ok: true,
       status: 200,
@@ -48,7 +48,7 @@
   };
 
   try {
-    ok("update: version constant matches the package", window.__robshell.version === "1.3.5");
+    ok("update: version constant matches the package", window.__robshell.version === "1.3.6");
     await waitFor(() => typeof term !== "undefined" && term && ptyMode === true && termReady === true, 6000, "pty ready");
     await waitFor(() => window.__robshell.update.state() !== "idle", 4000, "automatic check");
 
@@ -78,9 +78,9 @@
     await window.__robshell.update.check({ force: true });
     ok("update: a malformed tag is not an upgrade", window.__robshell.update.state() === "current");
     ok("update: malformed tag never reaches the badge", el("btnUpdate").hidden === true);
-    ok("update: version compare is total", window.__robshell.update.cmp("1.3.5", "1.3.5") === 0
+    ok("update: version compare is total", window.__robshell.update.cmp("1.3.6", "1.3.6") === 0
       && window.__robshell.update.cmp("1.10.0", "1.9.9") === 1
-      && window.__robshell.update.cmp("v1.2.9", "1.3.5") === -1);
+      && window.__robshell.update.cmp("v1.2.9", "1.3.6") === -1);
 
     // --- network refused by the host --------------------------------------
     feed = "fail";

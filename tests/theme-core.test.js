@@ -30,13 +30,13 @@ const TERM_KEYS = ["background", "foreground", "cursor", "cursorAccent", "select
   "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
   "brightBlack", "brightRed", "brightGreen", "brightYellow", "brightBlue",
   "brightMagenta", "brightCyan", "brightWhite"];
-const DARK_THEMES = ["opencode", "tokyoNight", "catppuccinMocha", "dracula", "nord", "gruvboxDark"];
+const DARK_THEMES = ["hacker", "opencode", "tokyoNight", "catppuccinMocha", "dracula", "nord", "gruvboxDark"];
 
 // --- theme registry shape ---
-eq("theme count", THEME_ORDER.length, 7);
-eq("six premium dark themes", THEME_ORDER.slice(0, 6), DARK_THEMES);
-eq("light kept for continuity", THEME_ORDER[6], "light");
-eq("default theme first", THEME_ORDER[0], "opencode");
+eq("theme count", THEME_ORDER.length, 8);
+eq("seven dark themes", THEME_ORDER.slice(0, 7), DARK_THEMES);
+eq("light kept for continuity", THEME_ORDER[7], "light");
+eq("default theme first", THEME_ORDER[0], "hacker");
 eq("THEMES is the registry", Object.keys(THEMES).length, THEME_ORDER.length);
 for (const key of THEME_ORDER) {
   const t = THEMES[key];
@@ -57,6 +57,18 @@ for (const key of THEME_ORDER) {
 }
 for (const key of DARK_THEMES) eq(`${key}: dark`, THEMES[key].dark, true);
 eq("light: light", THEMES.light.dark, false);
+
+const luminance = (hex) => {
+  const rgb = hex.slice(1).match(/../g).map((part) => parseInt(part, 16) / 255)
+    .map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+};
+for (const foreground of ["fg", "fgMuted", "fgFaint", "accent", "ok", "warn", "crit"]) {
+  for (const background of ["bg", "bgBar", "bgElev"]) {
+    const a = luminance(THEMES.hacker.ui[foreground]), b = luminance(THEMES.hacker.ui[background]);
+    ok(`hacker: ${foreground} on ${background} meets AA`, (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) >= 4.5);
+  }
+}
 
 // --- canonical palette spot checks (16-colour ANSI, not just background) ---
 // OpenCode is the default: verify it really is the neutral near-black palette
@@ -104,8 +116,8 @@ eq("legacy monokai -> gruvboxDark", themeKey("monokai"), "gruvboxDark");
 eq("legacy solarDark -> nord", themeKey("solarDark"), "nord");
 eq("legacy solarLight -> light", themeKey("solarLight"), "light");
 eq("existing key passes through", themeKey("dracula"), "dracula");
-eq("unknown key -> default", themeKey("nope"), "opencode");
-eq("undefined key -> default", themeKey(undefined), "opencode");
+eq("unknown key -> default", themeKey("nope"), "hacker");
+eq("undefined key -> default", themeKey(undefined), "hacker");
 
 // --- css custom-property naming ---
 eq("cssVar bg", cssVarName("bg"), "--rs-bg");

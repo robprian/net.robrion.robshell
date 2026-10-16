@@ -31,51 +31,6 @@
   }
   const fireBytes = (b64) => __fireEvent({ method: "shell/output", params: { connectionId: "c1", data: b64 } });
   const writesB64 = () => Buffer.from(__writes.join(""), "utf8").toString("base64");
-  // Mirror of the app's terminal-side filter (tap block rules + byte-exact
-  // finish tail): lines of an exec block are dropped, everything else —
-  // including a trailing partial line WITHOUT added newline — is kept.
-  function expectedTerminal(full, begin, end) {
-    const parts = full.split("\n");
-    const tail = parts.pop();
-    let inBlock = false, s = "";
-    for (const line of parts) {
-      if (!inBlock && line.indexOf(begin) >= 0) { inBlock = true; continue; }
-      if (inBlock && line.indexOf(end) >= 0) { inBlock = false; continue; }
-      if (inBlock) continue;
-      s += line + "\n";
-    }
-    if (tail) {
-      if (!inBlock && tail.indexOf(begin) >= 0) { /* swallowed like tap */ }
-      else if (inBlock && tail.indexOf(end) >= 0) { /* swallowed like tap */ }
-      else if (!inBlock) s += tail;
-    }
-    return s;
-  }
-  // Mirror of the permanent guard with no flight: marker lines vanish, and a
-  // lone begin line opens a suppression region until its end line (the
-  // truncated-stream rule) — exec bytes, never user bytes.
-  function expectedGuardOnly(full) {
-    const re = /__RM[0-9a-z]{6}[BE]__/;
-    const idre = /__RM([0-9a-z]{6})[BE]__/;
-    const parts = full.split("\n");
-    const tail = parts.pop();
-    let s = "", guard = "";
-    for (const line of parts) {
-      if (guard) {
-        if (line.indexOf(guard + "E__") >= 0) guard = "";
-        continue;
-      }
-      const m = line.match(re);
-      if (m) {
-        const id = (line.match(idre) || [])[1];
-        if (id && line.indexOf("__RM" + id + "B__") >= 0 && line.indexOf("__RM" + id + "E__") < 0) guard = "__RM" + id;
-        continue;
-      }
-      s += line + "\n";
-    }
-    if (tail && !guard && !re.test(tail)) s += tail;
-    return s;
-  }
   try {
     await waitFor(() => typeof term !== "undefined" && term && ptyMode === true && termReady === true, 6000, "pty ready");
     await sleep(2500); // let the (failing) monitor probe + sftp probe settle
@@ -159,7 +114,11 @@
         f.resolved.text.indexOf("echo hello") < 0 &&
         f.resolved.text.indexOf("typed-after") < 0 &&
         f.resolved.text.indexOf("after-resize") < 0);
-      const expDemux = expectedTerminal(FULL, begin, end);
+      // Remove only the fixture's actual wrapper and metric block. Prompts
+      // and bracketed-paste controls adjacent to those bytes are user traffic.
+      const wrapper = Buffer.from(cap.chunks[5].b64, "base64").toString("utf8").split("\r\n")[0] + "\r\n";
+      const metricBlock = begin + "\r\n" + cpuLine + "\r\n" + end + "\r\n";
+      const expDemux = FULL.replace(wrapper, "").replace(metricBlock, "");
       ok("ptyreal: interactive bytes land exactly once, exec bytes never", writesB64() === Buffer.from(expDemux, "utf8").toString("base64"));
       const w = __writes.join("");
       ok("ptyreal: no marker leaked to the terminal", w.indexOf("__RM") < 0);
@@ -171,7 +130,7 @@
       const before = writesB64();
       for (const ch of cap.chunks) fireBytes(ch.b64);
       await sleep(500);
-      const expGuard = expectedGuardOnly(FULL);
+      const expGuard = expDemux;
       const combined = Buffer.from(Buffer.from(before, "base64").toString("utf8") + expGuard, "utf8").toString("base64");
       ok("ptyreal: guard passes real bytes through unchanged", writesB64() === combined);
     }

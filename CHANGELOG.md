@@ -1,5 +1,13 @@
 # Changelog — RShell (`net.robrion.robshell`)
 
+## 1.3.6 — clean logout, faster echo, Hacker theme (2026-10-16)
+
+- `exit`, `logout`, Ctrl+D on an empty normal-buffer line, and a clean backend EOF end the session without the reconnect ladder. Monitoring stops, terminal input is disabled, and the status explains how to open a new SSH tab. The ended PTY cannot be revived by merely requesting its cwd.
+- Reconnect now awaits an authoritative PTY resize acknowledgement before reporting restoration. An inactive PTY ends retries instead of displaying a false "Connection restored" message. The existing xterm and scrollback are reused.
+- Ordinary unterminated terminal output is delivered immediately instead of waiting for the former 150 ms partial-line timer. Marker-framed legacy blocks stay filtered; ambiguous marker-prefix fragments have a short 8 ms coalescing window. Regression expectations now preserve the real PTY fixture's adjacent prompts and bracketed-paste controls instead of discarding them along with marker lines.
+- Added Hacker / Phosphor: matte near-black surfaces, readable green accents and cursor, a complete ANSI palette, compact controls, and a wrapped toolbar on narrow panels. New installations use it by default; saved theme selections remain unchanged. Select it in Settings → Theme on an existing installation.
+- Verified with 649 unit assertions, 242 VM integration assertions, and 40 native Chrome checks for echo latency, logout, inactive reconnect, alternate screens, theme switching, native cursor alignment, and desktop/narrow-panel appearance. These are synthetic bridge/browser checks, not a live DBX/SSH acceptance run.
+
 ## 1.3.5 — interactive monitoring isolated from PTY
 
 - Interactive SSH monitoring now uses SFTP reads only. Background startup probes, disk retries, and transport upgrades can no longer call `shell/exec` beside an interactive PTY. The reproduced failure was unframed `\r\n` emitted by a shared-channel exec attempt: marker filtering removed metric text but could not distinguish these newlines from legitimate terminal output, and marker scans therefore missed the cursor movement. A regression reproduces startup and repeated-refresh drift before this change and passes afterwards.

@@ -42,12 +42,12 @@
     // ================= theme tokens =================
     ok("theme: connected after load", snap().connState === "connected");
     const root = document.documentElement;
-    ok("theme: data attr set", root.getAttribute("data-rshell-theme") === "opencode");
-    ok("theme: --rs-bg token", root.style.getPropertyValue("--rs-bg") === "#0a0a0a");
-    ok("theme: --rs-bg-bar token", root.style.getPropertyValue("--rs-bg-bar") === "#030303");
+    ok("theme: data attr set", root.getAttribute("data-rshell-theme") === "hacker");
+    ok("theme: --rs-bg token", root.style.getPropertyValue("--rs-bg") === "#080c0a");
+    ok("theme: --rs-bg-bar token", root.style.getPropertyValue("--rs-bg-bar") === "#0c120e");
     ok("theme: --rs-scroll-thumb-hover token", root.style.getPropertyValue("--rs-scroll-thumb-hover") !== "");
-    ok("theme: full ANSI16 on the terminal", term.options.theme && term.options.theme.red === "#e06c75" && term.options.theme.brightBlack === "#808080" && !!term.options.theme.brightWhite);
-    ok("theme: terminal bg matches palette", term.options.theme.background === "#0a0a0a");
+    ok("theme: full ANSI16 on the terminal", term.options.theme && term.options.theme.red === "#ff8080" && term.options.theme.brightBlack === "#829787" && !!term.options.theme.brightWhite);
+    ok("theme: terminal bg matches palette", term.options.theme.background === "#080c0a");
     ok("theme: type metrics applied", term.options.lineHeight === 1.45 && term.options.cursorStyle === "block" && term.options.scrollback === 5000);
     ok("theme: mono font stack", String(term.options.fontFamily).includes("JetBrains Mono"));
 

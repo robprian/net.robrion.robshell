@@ -1,4 +1,6 @@
-# RShell (net.robrion.robshell v1.3.5)
+# RShell (net.robrion.robshell v1.3.6)
+
+Stable release: [v1.3.6](https://github.com/robprian/net.robrion.robshell/releases/tag/v1.3.6). This build stops reconnecting after logout, validates PTY availability before reporting restoration, and removes the 150 ms ordinary-echo delay. It adds **Hacker / Phosphor** with a complete ANSI palette and a compact, responsive toolbar. Existing installations can select it under Settings → Theme; saved themes are preserved. Native-browser verification used a synthetic SSH bridge, not a live DBX connection.
 
 This release removes background monitor exec from interactive SSH sessions. Metrics use SFTP reads; disk usage stays `N/A` when no isolated collector is available. The user confirmed that cursor blinking/alignment is now working. See `tests/CURSOR-INVESTIGATION.md` for the automated and native-renderer evidence and its limits.
 
@@ -14,7 +16,7 @@ only the identity strings/version patched in place.
 ```
 com.robshell/               <- repo folder name (historical)
   package/                  <- plugin source (this is what gets zipped)
-    manifest.json           <- id net.robrion.robshell, name RShell, v1.3.4
+    manifest.json           <- id net.robrion.robshell, name RShell, v1.3.6
     checksums.json          <- sha256 of every other file, exactly once
     assets/plugin.ico       <- icon.png artwork, minimized ICO (32 KB)
     bin/windows-x64/dbx-plugin-robshell.exe
@@ -26,7 +28,7 @@ com.robshell/               <- repo folder name (historical)
   tests/
     monitor-core.test.js    <- 70 unit tests: metric parsers + reconnect core
     suggest-core.test.js    <- 62 unit tests for the suggestion engine
-    theme-core.test.js      <- 445 unit tests for the theme token palettes
+    theme-core.test.js      <- 517 unit tests for the theme token palettes
     monitor-harness.js      <- headless integration harness (real UI code)
     drv-*.js                <- per-scenario drivers
                                (ok/reject/sftp/sftpdisk/paste/suggest/conn/update/pty)
@@ -73,6 +75,8 @@ com.robshell/               <- repo folder name (historical)
     backoff ladder (0.5→1→2→5 s). The xterm instance is reused, so **the
     scrollback on screen is never cleared**; notes are appended below it.
     Auth/permission/host-key failures are recognised and stop the ladder.
+    Intentional logout and clean EOF end the session; open a new SSH tab to
+    start another shell. Reconnect validates the PTY before reporting success.
   - **Keep-alive** (opt-in, 1/5/10/30/60 s): keeps an idle NAT/sshd timeout
     from dropping the session using a **silent `shell/cwd` probe** — no bytes
     are ever written to the PTY, so nothing echoes, nothing repaints and no
@@ -100,11 +104,13 @@ com.robshell/               <- repo folder name (historical)
   DBX Plugin Center.
 - **Premium terminal**:
   - Theme system with a full 18-token UI palette **and** a complete xterm
-    `ITheme` (16 ANSI + 8 bright + cursor + selection) per theme, applied live
-    without ever touching the byte stream. Themes: **OpenCode (default)**,
+    `ITheme` (8 normal + 8 bright ANSI colours, cursor and selection) per theme, applied live
+    without ever touching the byte stream. Themes: **Hacker / Phosphor (new default)**, OpenCode,
     Tokyo Night, Catppuccin Mocha, Dracula, Nord, Gruvbox Dark, Light. Legacy
     saved keys migrate automatically.
-  - **Real dark default.** The OpenCode theme is the neutral near-black palette
+  - **Dark palettes.** Hacker uses matte near-black with readable phosphor-green
+    accents and a compact toolbar. Existing saved selections stay unchanged.
+    The OpenCode theme remains the neutral near-black palette
     from OpenCode's own default theme — `#0a0a0a` surface, `#030303` bar,
     `#141414`/`#1e1e1e` raised panels, `#eeeeee` text, `#808080` muted,
     `#484848` borders, `#9d7cd8` accent, `#fab283` cursor — with no blue cast,
@@ -152,7 +158,7 @@ python3 -c "import re;html=open('package/ui/index.html').read();open('/tmp/openc
 node tests/monitor-core.test.js    # 70 parser + reconnect unit tests
 node tests/suggest-core.test.js    # 62 suggestion unit tests
 node tests/theme-core.test.js      # 445 theme token unit tests
-node tests/monitor-harness.js both # 210 integration assertions, 9 scenarios
+node tests/monitor-harness.js both # all 11 registered integration scenarios
 ```
 
 The official `dbx-plugin package` CLI was evaluated: it requires
